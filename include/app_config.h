@@ -31,14 +31,13 @@
 #endif
 
 namespace app_config {
-inline constexpr char wifiSsid[] = WIFI_SSID_VALUE;
-inline constexpr char wifiPassword[] = WIFI_PASSWORD_VALUE;
-inline constexpr char assistantBaseUrl[] = ASSISTANT_BASE_URL_VALUE;
-inline constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
-inline constexpr char deviceId[] = DEVICE_ID_VALUE;
-inline constexpr char defaultCommand[] = DEFAULT_3C_COMMAND_VALUE;
-inline constexpr unsigned long wifiRetryMs = 10'000;
-inline constexpr unsigned long healthCheckMs = 30'000;
-inline constexpr unsigned long httpTimeoutMs = 8'000;
+static constexpr char wifiSsid[] = WIFI_SSID_VALUE;
+static constexpr char wifiPassword[] = WIFI_PASSWORD_VALUE;
+static constexpr char assistantBaseUrl[] = ASSISTANT_BASE_URL_VALUE;
+static constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
+static constexpr char deviceId[] = DEVICE_ID_VALUE;
+static constexpr char defaultCommand[] = DEFAULT_3C_COMMAND_VALUE;
+static constexpr unsigned long wifiRetryMs = 10000UL;
+static constexpr unsigned long healthCheckMs = 30000UL;
+static constexpr unsigned long httpTimeoutMs = 8000UL;
 }
-

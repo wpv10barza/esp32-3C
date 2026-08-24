@@ -48,6 +48,8 @@ struct DebouncedButton {
   bool previousRead = HIGH;
   unsigned long changedAt = 0;
 
+  explicit DebouncedButton(int buttonPin) : pin(buttonPin) {}
+
   bool pressed() {
     const bool reading = digitalRead(pin);
     if (reading != previousRead) {
@@ -300,4 +302,3 @@ void loop() {
   }
   delay(5);
 }
-
