@@ -1,0 +1,37 @@
+name: Firmware ESP-Hi 3C
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esp32-3c-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.18
+      - name: Compile ESP32-C3 firmware
+        run: pio run --environment esp_hi_3c
+      - name: Upload firmware binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp-hi-3c-firmware
+          path: |
+            .pio/build/esp_hi_3c/firmware.bin
+            .pio/build/esp_hi_3c/bootloader.bin
+            .pio/build/esp_hi_3c/partitions.bin
+          if-no-files-found: error
+
