@@ -1,4 +1,4 @@
-name: Firmware ESP-Hi 3C
+name: Firmware ESP32 3C
 
 on:
   push:
@@ -23,15 +23,17 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Compile ESP32-C3 firmware
-        run: pio run --environment esp_hi_3c
+      - name: Compile ESP-Hi C3 and ESP32-4848S040 firmware
+        run: pio run --environment esp_hi_3c --environment panel_4848s040
       - name: Upload firmware binaries
         uses: actions/upload-artifact@v4
         with:
-          name: esp-hi-3c-firmware
+          name: esp32-3c-firmware
           path: |
             .pio/build/esp_hi_3c/firmware.bin
             .pio/build/esp_hi_3c/bootloader.bin
             .pio/build/esp_hi_3c/partitions.bin
+            .pio/build/panel_4848s040/firmware.bin
+            .pio/build/panel_4848s040/bootloader.bin
+            .pio/build/panel_4848s040/partitions.bin
           if-no-files-found: error
-

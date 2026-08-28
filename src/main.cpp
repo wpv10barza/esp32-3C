@@ -1,3 +1,5 @@
+#if defined(BOARD_ESP_HI_C3)
+
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoPixel.h>
@@ -302,3 +304,5 @@ void loop() {
   }
   delay(5);
 }
+
+#endif  // BOARD_ESP_HI_C3

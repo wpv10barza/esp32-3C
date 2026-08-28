@@ -1,87 +1,118 @@
-# ESP-Hi 3C
+# ESP32 3C V2
 
-Firmware V2 para el perro mecánico **ESP-Hi con ESP32-C3** conectado al
-Asistente 3C que se ejecuta en WSL. Usa el pinout oficial del ESP-Hi:
+Firmware para usar un ESP32 como terminal del **Asistente 3C** que se ejecuta
+en WSL. El repositorio conserva dos objetivos de hardware independientes:
 
-- pantalla ST7789 160 × 80: MOSI 4, CLK 5 y DC 10;
-- cuatro WS2812: GPIO 8;
-- servos: delantero izquierdo 21, delantero derecho 19, trasero izquierdo 20
-  y trasero derecho 18;
-- botones: BOOT 9, movimiento 0 y orden 3C 1.
+| Entorno PlatformIO | Hardware | Interaccion |
+|---|---|---|
+| `esp_hi_3c` | Perro ESP-Hi con ESP32-C3 | pantalla 160x80, LED, botones y cuatro servos |
+| `panel_4848s040` | Panel ESP32-4848S040 con ESP32-S3-N16R8 | pantalla tactil 480x480, ojos, audio y botones tactiles |
 
-## Funciones V2
+No cargue el binario C3 en el panel S3 ni el binario S3 en el perro. GitHub
+Actions compila ambos por separado y publica los dos grupos de binarios.
 
-- Conexión Wi-Fi de 2,4 GHz y comprobación periódica del endpoint WSL.
-- Ojos/estado en la pantalla: desconectado, disponible, pendiente o error.
-- LED de estado, cuatro servos y movimientos básicos: avanzar, retroceder,
-  girar, sentarse, dar la pata y detenerse.
-- Control web local en `http://esp-hi-3c.local/`.
-- Envío de texto a `POST /api/device/v1/commands` con token e idempotencia.
-- Seguridad 3C: el dispositivo solo crea una vista previa; la escritura exige
-  confirmación humana en `asistente-3c`.
+## Panel ESP32-4848S040 de las fotografias
 
-La entrada de micrófono/TTS completa de XiaoZhi no forma parte de esta primera
-integración 3C. El botón GPIO 1 envía el comando predeterminado y la página web
-local permite escribir cualquier orden. Así se mantiene el ESP32 como terminal
-de campo y el backend Linux como autoridad sobre las reglas y Google Sheets.
+La implementacion usa el hardware documentado para esta placa:
 
-## 1. Preparar WSL
+- ESP32-S3, flash QIO de 16 MB y PSRAM OPI de 8 MB;
+- LCD ST7701 de 480x480 con bus RGB de 16 bits;
+- control del LCD por SPI: CS 39, SCK 48 y MOSI 47;
+- retroiluminacion en GPIO 38;
+- tactil GT911 en I2C `0x5D`: SDA 19 y SCL 45;
+- amplificador de altavoz por I2S: BCLK 1, LRCLK 2 y DATA 40.
 
-Coloque los repositorios como carpetas independientes dentro de `~/projects`;
-no los copie dentro de `.venv` ni dentro de `sap-pm-rag-parser-production`:
+Los GPIO 1, 2 y 40 tambien se usan para los reles en otras variantes de esta
+familia. Si su unidad tiene reles en lugar del circuito de audio, configure
+`PANEL_AUDIO_ENABLED_VALUE 0` antes de cargarla.
+
+En la pantalla se puede tocar **PROBAR WSL** o **ENVIAR 3C**. La segunda accion
+envia el comando predeterminado y muestra el ciclo completo: pendiente,
+aplicado o cancelado. Para escribir otra orden, abra
+`http://esp32-panel-3c.local/` desde un equipo de la misma red.
+
+El panel fotografiado tiene salida de altavoz, pero no aparece un microfono en
+su esquema. Por eso esta V2 admite tactil y texto web; una conversacion de voz
+completa requiere agregar un microfono I2S compatible.
+
+## Seguridad del flujo 3C
+
+El dispositivo llama a:
+
+- `GET /api/device/v1/health`;
+- `POST /api/device/v1/commands`;
+- `GET /api/device/v1/commands/{command_id}`.
+
+La orden se autentica con `X-3C-Device-Token`, usa un `request_id` idempotente
+y queda en `pending_confirmation`. El ESP32 nunca escribe directamente en
+Google Sheets. La persona debe revisar la vista previa y pulsar **Confirmar y
+aplicar** en `asistente-3c`; el panel consulta el resultado y actualiza su cara.
+
+## 1. Instalar en WSL
+
+Mantenga los repositorios como carpetas independientes en `~/projects`. No los
+coloque dentro de `.venv` ni dentro de `sap-pm-rag-parser-production`:
 
 ```bash
 cd ~/projects
 git clone https://github.com/wpv10barza/asistente-3c.git
 git clone https://github.com/wpv10barza/esp32-3C.git
+
 cd ~/projects/asistente-3c
-cp .env.example .env
+cp -n .env.example .env
 nano .env
 npm ci
 npm run build
 npm start
 ```
 
-En `.env`, `ESP32_API_TOKEN` debe ser un valor largo y aleatorio. El servidor
-escucha en `0.0.0.0:3000`. Desde el ESP32 se usa la IPv4 LAN de Windows, no
-`localhost` ni `127.0.0.1`. En WSL2 habilite red reflejada o el reenvío del
-puerto TCP 3000 y permita ese puerto solo para la red privada de Windows.
+En `.env`, asigne un valor largo y aleatorio a `ESP32_API_TOKEN`. El servidor
+escucha en `0.0.0.0:3000`. Desde el ESP32 use la IPv4 LAN de Windows; no use
+`127.0.0.1` ni `localhost`.
 
-Compruebe desde otro equipo conectado al mismo Wi-Fi:
+Compruebe la ruta desde otro equipo conectado al mismo Wi-Fi:
 
 ```bash
 curl http://IP_LAN_DE_WINDOWS:3000/api/device/v1/health
 ```
 
-## 2. Configurar el firmware sin publicar secretos
+## 2. Configurar el ESP32 sin publicar secretos
 
 ```bash
 cd ~/projects/esp32-3C
-cp include/local_config.example.h include/local_config.h
+cp -n include/local_config.example.h include/local_config.h
 nano include/local_config.h
 ```
 
-Configure el mismo `ESP32_API_TOKEN_VALUE`, su Wi-Fi 2,4 GHz y la URL, por
-ejemplo `http://192.168.1.50:3000`. `include/local_config.h` está ignorado por
-Git, por lo que un futuro `git pull` conserva sus secretos locales.
+Use el mismo token del backend y complete:
 
-## 3. Compilar y cargar
+```cpp
+#define WIFI_SSID_VALUE "TU_WIFI_2_4_GHZ"
+#define WIFI_PASSWORD_VALUE "TU_CLAVE"
+#define ASSISTANT_BASE_URL_VALUE "http://IP_LAN_DE_WINDOWS:3000"
+#define ESP32_API_TOKEN_VALUE "EL_MISMO_TOKEN_LARGO"
+#define DEVICE_ID_VALUE "panel-4848s040-3c-01"
+#define PANEL_AUDIO_ENABLED_VALUE 1
+```
 
-Con PlatformIO:
+`include/local_config.h` esta ignorado por Git y un futuro `git pull` no
+reemplaza sus secretos.
+
+## 3. Compilar y cargar el panel
 
 ```bash
 python3 -m pip install platformio==6.1.18
-pio run
-pio run --target upload
+pio run --environment panel_4848s040
+pio run --environment panel_4848s040 --target upload
 pio device monitor --baud 115200
 ```
 
-Antes de grabar, desconecte la cabeza del cuerpo: en el ESP-Hi real, el control
-de servos comparte recursos con el USB-C. Alimente los cuatro servos desde la
-placa/base prevista por el fabricante; no desde un pin GPIO. La postura inicial
-usa un rango conservador de 45° a 135°, pero debe probarse con el cuerpo elevado
-antes de apoyar el robot.
+Para el perro ESP-Hi C3 use `--environment esp_hi_3c`. Un `pio run` sin
+entorno compila ambos objetivos y detecta incompatibilidades de los dos.
 
-GitHub Actions compila el firmware para `esp32-c3-devkitm-1` en cada `push` y
-publica `firmware.bin`, `bootloader.bin` y `partitions.bin` como artefacto.
+El USB-C del panel pasa por un CH340 hacia UART0. La configuracion del objetivo
+S3 usa flash QIO 16 MB y PSRAM OPI. No active USB CDC al inicio para este panel.
 
+> Advertencia: algunas versiones incluyen una placa trasera con reles para
+> tension de red. Desconecte completamente esa placa y la red electrica antes
+> de abrir, programar o manipular el panel. El USB no aisla contactos de red.
