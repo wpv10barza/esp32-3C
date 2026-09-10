@@ -11,6 +11,17 @@ en WSL. El repositorio conserva dos objetivos de hardware independientes:
 No cargue el binario C3 en el panel S3 ni el binario S3 en el perro. GitHub
 Actions compila ambos por separado y publica los dos grupos de binarios.
 
+## Checklist de cierre — Ajuste de Placa
+
+El cierre de esta tarea queda documentado en
+[`docs/CHECKLIST_CIERRE_AJUSTE_PLACA.md`](docs/CHECKLIST_CIERRE_AJUSTE_PLACA.md).
+El documento registra la separación de objetivos, configuración de pines,
+identificación de dispositivo, manejo de credenciales locales, condición de
+audio/relés y criterio de aceptación para la validación en campo.
+
+**Estado:** ✅ Cerrado para los objetivos de hardware actualmente soportados por
+`main`.
+
 ## Panel ESP32-4848S040 de las fotografias
 
 La implementacion usa el hardware documentado para esta placa:
