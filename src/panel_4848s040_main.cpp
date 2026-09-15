@@ -32,6 +32,9 @@ constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
 constexpr int kUiButtonY = 360;
 constexpr int kUiButtonHeight = 94;
+constexpr int kUiButtonLeftX = 20;
+constexpr int kUiButtonRightX = 250;
+constexpr int kUiButtonWidth = 210;
 constexpr int kUiFooterY = 458;
 constexpr int kUiFooterHeight = kScreenHeight - kUiFooterY;
 
@@ -160,8 +163,8 @@ void drawPanel() {
     drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
   }
 
-  drawButton(20, kUiButtonY, 210, kUiButtonHeight, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, kUiButtonY, 210, kUiButtonHeight, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(kUiButtonLeftX, kUiButtonY, kUiButtonWidth, kUiButtonHeight, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(kUiButtonRightX, kUiButtonY, kUiButtonWidth, kUiButtonHeight, "ENVIAR 3C", color565(18, 105, 73));
 
   // The LCD is 480x480. Paint the final 22 rows explicitly instead of leaving
   // an unstructured dark band below the touch buttons.
@@ -471,9 +474,13 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+  if (sample.touched && !touchDown &&
+      sample.y >= kUiButtonY && sample.y < kUiButtonY + kUiButtonHeight) {
+    if (sample.x >= kUiButtonLeftX && sample.x < kUiButtonLeftX + kUiButtonWidth) {
+      checkBackendHealth();
+    } else if (sample.x >= kUiButtonRightX && sample.x < kUiButtonRightX + kUiButtonWidth) {
+      send3CCommand(app_config::defaultCommand);
+    }
   }
   touchDown = sample.touched;
 }
