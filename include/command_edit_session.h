@@ -4,8 +4,6 @@
 
 #include "command_buffer.h"
 
-// Transactional editing wrapper for the committed command buffer.
-// The committed value is untouched until OK succeeds; CANCEL only discards the draft.
 template <std::size_t Capacity>
 class CommandEditSession {
  public:
@@ -31,8 +29,7 @@ class CommandEditSession {
   }
 
   bool cancel() {
-    if (!editing_) return false;
-    if (!original_.invariantHolds() || !draft_.invariantHolds()) return false;
+    if (!editing_ || !original_.invariantHolds() || !draft_.invariantHolds()) return false;
     editing_ = false;
     original_.clear();
     draft_.clear();
@@ -47,7 +44,6 @@ class CommandEditSession {
 
   Buffer& draft() { return draft_; }
   const Buffer& draft() const { return draft_; }
-
   const char* value() const { return editing_ ? draft_.c_str() : committed_.c_str(); }
 
  private:
