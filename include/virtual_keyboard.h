@@ -85,7 +85,7 @@ constexpr std::array<KeyDefinition, 10> kAlphaRow1 = {{
 constexpr std::array<KeyDefinition, 10> kAlphaRow2 = {{
   {KeyKind::Character,"Z",0,1},{KeyKind::Character,"X",1,1},{KeyKind::Character,"C",2,1},
   {KeyKind::Character,"V",3,1},{KeyKind::Character,"B",4,1},{KeyKind::Character,"N",5,1},
-  {KeyKind::Character,"M",6,1},{KeyKind::Character=KeyKind::Character,".",8,1},{KeyKind::Character,"/",9,1},{KeyKind::Character,",",7,1}}};
+  {KeyKind::Character,"M",6,1},{KeyKind::Character,",",7,1},{KeyKind::Character,".",8,1},{KeyKind::Character,"/",9,1}}};
 constexpr std::array<KeyDefinition, 7> kAlphaControlRow = {{
   {KeyKind::ToggleAlphaNumeric,"123",0,1},{KeyKind::Space,"SPACE",1,4},{KeyKind::Backspace,"BKSP",5,1},
   {KeyKind::Clear,"CLR",6,1},{KeyKind::CursorLeft,"<",7,1},{KeyKind::CursorRight,">",8,1},{KeyKind::Enter,"ENTER",9,1}}};
