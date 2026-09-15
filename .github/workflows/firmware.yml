@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,13 +23,19 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Run command buffer unit tests
+      - name: Run native regression suite
         run: pio test --environment native
+      - name: Verify end-to-end command UI integration
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/test_command_ui_integration.cpp \
+            -o /tmp/test_command_ui_integration
+          /tmp/test_command_ui_integration
 
   compile:
     runs-on: ubuntu-latest
     needs: test
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
