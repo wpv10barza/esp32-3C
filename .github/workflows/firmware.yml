@@ -21,6 +21,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Run command validation regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/command_validation/main.cpp \
+            -o /tmp/test_command_validation
+          /tmp/test_command_validation
+      - name: Run command edit-session regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/command_edit_session/main.cpp \
+            -o /tmp/test_command_edit_session
+          /tmp/test_command_edit_session
       - name: Run command buffer regression
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
