@@ -115,7 +115,7 @@ constexpr std::array<KeyDefinition, 10> kAlphaRow1 = {{
     {KeyKind::Character, "J", 6, 1},
     {KeyKind::Character, "K", 7, 1},
     {KeyKind::Character, "L", 8, 1},
-    {KeyKind::Backspace, "BKSP", 9, 1},
+    {KeyKind::Character, ".", 9, 1},
 }};
 
 constexpr std::array<KeyDefinition, 10> kAlphaRow2 = {{
@@ -127,11 +127,11 @@ constexpr std::array<KeyDefinition, 10> kAlphaRow2 = {{
     {KeyKind::Character, "N", 5, 1},
     {KeyKind::Character, "M", 6, 1},
     {KeyKind::Character, ",", 7, 1},
-    {KeyKind::Character, ".", 8, 1},
-    {KeyKind::Character, "/", 9, 1},
+    {KeyKind::Character, "/", 8, 1},
+    {KeyKind::Character, "?", 9, 1},
 }};
 
-// Final alpha row provides common command/shell symbols before the controls.
+// Command-oriented symbols remain available without switching layout.
 constexpr std::array<KeyDefinition, 10> kAlphaRow3 = {{
     {KeyKind::Character, "-", 0, 1},
     {KeyKind::Character, "_", 1, 1},
@@ -141,8 +141,8 @@ constexpr std::array<KeyDefinition, 10> kAlphaRow3 = {{
     {KeyKind::Character, "#", 5, 1},
     {KeyKind::Character, "=", 6, 1},
     {KeyKind::Character, "+", 7, 1},
-    {KeyKind::Backspace, "BKSP", 8, 1},
-    {KeyKind::ToggleAlphaNumeric, "123", 9, 1},
+    {KeyKind::Character, "*", 8, 1},
+    {KeyKind::Character, "!", 9, 1},
 }};
 
 constexpr std::array<KeyDefinition, 10> kNumericRow0 = {{
@@ -194,23 +194,21 @@ constexpr std::array<KeyDefinition, 10> kNumericRow3 = {{
     {KeyKind::Character, "`", 6, 1},
     {KeyKind::Character, "\\", 7, 1},
     {KeyKind::Character, ".", 8, 1},
-    {KeyKind::Backspace, "BKSP", 9, 1},
+    {KeyKind::Character, ",", 9, 1},
 }};
 
-constexpr std::array<KeyDefinition, 5> kAlphaControlRow = {{
+constexpr std::array<KeyDefinition, 4> kAlphaControlRow = {{
     {KeyKind::ToggleAlphaNumeric, "123", 0, 2},
     {KeyKind::Space, "SPACE", 2, 5},
-    {KeyKind::Enter, "ENTER", 7, 3},
-    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
-    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
+    {KeyKind::Backspace, "BKSP", 7, 1},
+    {KeyKind::Enter, "ENTER", 8, 2},
 }};
 
-constexpr std::array<KeyDefinition, 5> kNumericControlRow = {{
+constexpr std::array<KeyDefinition, 4> kNumericControlRow = {{
     {KeyKind::ToggleAlphaNumeric, "ABC", 0, 2},
     {KeyKind::Space, "SPACE", 2, 5},
-    {KeyKind::Enter, "ENTER", 7, 3},
-    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
-    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
+    {KeyKind::Backspace, "BKSP", 7, 1},
+    {KeyKind::Enter, "ENTER", 8, 2},
 }};
 
 }  // namespace detail
@@ -222,7 +220,7 @@ inline Row rowDefinition(KeyboardMode mode, uint8_t row) {
       case 1: return {detail::kAlphaRow1.data(), detail::kAlphaRow1.size()};
       case 2: return {detail::kAlphaRow2.data(), detail::kAlphaRow2.size()};
       case 3: return {detail::kAlphaRow3.data(), detail::kAlphaRow3.size()};
-      case 4: return {detail::kAlphaControlRow.data(), 3};
+      case 4: return {detail::kAlphaControlRow.data(), detail::kAlphaControlRow.size()};
       default: return {nullptr, 0};
     }
   }
@@ -232,7 +230,7 @@ inline Row rowDefinition(KeyboardMode mode, uint8_t row) {
     case 1: return {detail::kNumericRow1.data(), detail::kNumericRow1.size()};
     case 2: return {detail::kNumericRow2.data(), detail::kNumericRow2.size()};
     case 3: return {detail::kNumericRow3.data(), detail::kNumericRow3.size()};
-    case 4: return {detail::kNumericControlRow.data(), 3};
+    case 4: return {detail::kNumericControlRow.data(), detail::kNumericControlRow.size()};
     default: return {nullptr, 0};
   }
 }
