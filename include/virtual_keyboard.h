@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "touch_hit_test.h"
+
 namespace virtual_keyboard {
 
 constexpr int kScreenWidth = 480;
@@ -196,12 +198,16 @@ inline size_t buildKeys(KeyboardMode mode, Key* out, size_t capacity) {
 inline bool hitTest(KeyboardMode mode, int x, int y, Key* matched = nullptr) {
   std::array<Key, 40> keys{};
   const size_t count = buildKeys(mode, keys.data(), keys.size());
+  std::array<touch::KeyFrame, 40> frames{};
   for (size_t index = 0; index < count; ++index) {
-    if (!keys[index].rect.contains(x, y)) continue;
-    if (matched) *matched = keys[index];
-    return true;
+    frames[index] = touch::KeyFrame{keys[index].rect.left, keys[index].rect.top,
+                                    static_cast<int16_t>(keys[index].rect.right - keys[index].rect.left),
+                                    static_cast<int16_t>(keys[index].rect.bottom - keys[index].rect.top)};
   }
-  return false;
+  const size_t match = touch::hitTest(frames.data(), count, x, y);
+  if (match == touch::kNoKey) return false;
+  if (matched) *matched = keys[match];
+  return true;
 }
 
 }  // namespace virtual_keyboard
