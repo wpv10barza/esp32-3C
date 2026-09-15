@@ -471,7 +471,7 @@ void handleTouch() {
   if (!sample.ready) return;
   if (sample.touched && !touchDown && sample.y >= 350) {
     if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+    else send3CCommand(app_config::commandBuffer);
   }
   touchDown = sample.touched;
 }
