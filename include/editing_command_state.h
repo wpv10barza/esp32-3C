@@ -26,6 +26,7 @@ class EditingCommandState {
   bool ok() { return session_.ok(); }
   bool cancel() { return session_.cancel(); }
   bool invariantHolds() const { return session_.invariantHolds(); }
+  CommandCommitRejection lastRejection() const { return session_.lastRejection(); }
 
   Buffer& draft() { return session_.draft(); }
   const Buffer& draft() const { return session_.draft(); }
