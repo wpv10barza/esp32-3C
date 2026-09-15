@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Run command buffer unit tests
+      - name: Run native unit tests (command buffer + virtual keyboard hit testing)
         run: pio test --environment native
 
   compile:
