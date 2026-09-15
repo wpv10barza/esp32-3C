@@ -10,6 +10,9 @@ struct KeyFrame {
   int16_t y;
   int16_t width;
   int16_t height;
+
+  constexpr KeyFrame(int16_t xValue, int16_t yValue, int16_t widthValue, int16_t heightValue)
+      : x(xValue), y(yValue), width(widthValue), height(heightValue) {}
 };
 
 constexpr size_t kNoKey = static_cast<size_t>(-1);
