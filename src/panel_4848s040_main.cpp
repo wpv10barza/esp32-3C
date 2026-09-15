@@ -151,10 +151,10 @@ void drawButton(const touch_priority::Rect& rect, const char* label, uint16_t fi
   display->print(label);
 }
 
-bool buildPrefixWidths(uint16_t (&prefix)[kCommandCapacity + 1]) {
+bool buildPrefixWidths(const Command& buffer, uint16_t (&prefix)[kCommandCapacity + 1]) {
   prefix[0] = 0;
-  const char* text = commandEditor.draft().c_str();
-  const size_t length = commandEditor.draft().length();
+  const char* text = buffer.c_str();
+  const size_t length = buffer.length();
   if (length > kCommandCapacity) return false;
   display->setTextSize(2);
   for (size_t index = 0; index < length; ++index) {
@@ -173,7 +173,7 @@ bool buildPrefixWidths(uint16_t (&prefix)[kCommandCapacity + 1]) {
 size_t cursorFromFieldTouch(int x) {
   if (!commandEditor.isEditing()) return 0;
   uint16_t prefix[kCommandCapacity + 1] = {};
-  buildPrefixWidths(prefix);
+  buildPrefixWidths(commandEditor.draft(), prefix);
   const size_t length = commandEditor.draft().length();
   const int left = command_field::kEditingBounds.left + command_field::kHorizontalPadding;
   const int target = x - left;
@@ -193,19 +193,18 @@ void drawCommandField(const command_field::Rect& bounds, bool editing) {
   const int contentY = bounds.top + command_field::kVerticalPadding;
   const int contentRight = bounds.right - command_field::kHorizontalPadding;
   const int contentWidth = contentRight - contentX;
+  const Command& buffer = editing ? commandEditor.draft() : commandBuffer;
 
   display->fillRoundRect(bounds.left, bounds.top, bounds.right - bounds.left,
                          bounds.bottom - bounds.top, 10, color565(7, 13, 23));
   display->drawRoundRect(bounds.left, bounds.top, bounds.right - bounds.left,
-                         bounds.bottom - bounds.top, 10,
-                         color565(110, 150, 175));
+                         bounds.bottom - bounds.top, 10, color565(110, 150, 175));
   display->setTextSize(2);
-  display->setTextColor(WHITE);
 
   uint16_t prefix[kCommandCapacity + 1] = {};
-  buildPrefixWidths(prefix);
-  const size_t length = commandEditor.draft().length();
-  const size_t cursor = commandEditor.draft().cursor();
+  buildPrefixWidths(buffer, prefix);
+  const size_t length = buffer.length();
+  const size_t cursor = buffer.cursor();
   const command_text_viewport::Window view =
       command_text_viewport::compute(prefix, length, cursor, contentWidth, command_field::kCursorWidth);
 
@@ -213,28 +212,32 @@ void drawCommandField(const command_field::Rect& bounds, bool editing) {
     display->setTextColor(color565(135, 150, 165));
     display->setCursor(contentX, contentY);
     display->print(editing ? "Escriba una orden..." : "Sin orden");
-    if (editing) display->fillRect(contentX, contentY - 2, command_field::kCursorWidth,
-                                   bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
-  } else {
-    String visible = commandEditor.draft().c_str();
-    visible = visible.substring(view.first, view.last);
-    display->setTextColor(color565(235, 242, 248));
-    display->setCursor(contentX, contentY);
-    display->print(visible);
     if (editing) {
-      const int cursorX = contentX + view.cursorX;
-      if (cursorX < contentRight) {
-        display->fillRect(cursorX, contentY - 2, command_field::kCursorWidth,
-                          bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
-      }
+      display->fillRect(contentX, contentY - 2, command_field::kCursorWidth,
+                        bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
+    }
+    return;
+  }
+
+  String visible = buffer.c_str();
+  visible = visible.substring(view.first, view.last);
+  display->setTextColor(color565(235, 242, 248));
+  display->setCursor(contentX, contentY);
+  display->print(visible);
+
+  if (editing) {
+    const int cursorX = contentX + view.cursorX;
+    if (cursorX < contentRight) {
+      display->fillRect(cursorX, contentY - 2, command_field::kCursorWidth,
+                        bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
     }
   }
 }
 
 void drawKeyboard() {
   if (!displayReady) return;
-  virtual_keyboard::Key keys[40] = {};
-  const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 40);
+  virtual_keyboard::Key keys[50] = {};
+  const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
   for (size_t index = 0; index < count; ++index) {
     const auto& key = keys[index];
     const uint16_t fill = key.definition.kind == virtual_keyboard::KeyKind::Character
@@ -580,7 +583,7 @@ void beginCommandEditing() {
 }
 
 bool commitAndSendCommand() {
-  if (!commandEditor.isEditing() || commandEditor.draft().empty()) return false;
+  if (!commandEditor.isEditing() || commandEditor.draft().length() == 0) return false;
   if (!commandEditor.ok()) return false;
   if (!app_config::commandBuffer.set(commandBuffer.c_str())) return false;
   suppressTouchUntilRelease = true;
