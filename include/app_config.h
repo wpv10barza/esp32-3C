@@ -36,8 +36,6 @@
 #define DEFAULT_3C_COMMAND_VALUE "Cambia la tarea J10 a mensual"
 #endif
 
-// This board uses GPIO 1/2/40 either for the NS4168-compatible I2S amplifier
-// or for relays, depending on the assembled version. Set to 0 for relay units.
 #ifndef PANEL_AUDIO_ENABLED_VALUE
 #define PANEL_AUDIO_ENABLED_VALUE 1
 #endif
@@ -53,11 +51,11 @@ static constexpr char assistantBaseUrl[] = ASSISTANT_BASE_URL_VALUE;
 static constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
 static constexpr char deviceId[] = DEVICE_ID_VALUE;
 
-// Runtime source of truth for the command sent by ENVIAR 3C.
-// The default is only the initial buffer contents; input handling may replace it.
+// Runtime source of truth for commands sent by ENVIAR 3C.
+// The default is only the initial value; the UI may replace it at runtime.
 static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;
 
-// Backward-compatible alias. New code must read/write commandBuffer instead.
+// Backward-compatible alias for older callers; new UI code uses commandBuffer.
 static String& defaultCommand = commandBuffer;
 
 static constexpr bool panelAudioEnabled = PANEL_AUDIO_ENABLED_VALUE != 0;
