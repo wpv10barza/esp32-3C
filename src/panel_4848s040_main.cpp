@@ -11,6 +11,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "command_field.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -50,6 +51,12 @@ PanelState panelState = PanelState::Booting;
 String panelDetail = "Iniciando";
 String lastBackendMessage = "Sin verificar";
 String lastCommandId;
+String commandFieldText;
+size_t commandFieldCursor = 0;
+bool commandFieldFocused = false;
+// Kept independent from PanelState so the future EditingCommand state can
+// switch the field to the top-safe editing bounds without changing drawing.
+bool commandFieldEditing = false;
 unsigned long lastWifiAttempt = 0;
 unsigned long lastHealthCheck = 0;
 unsigned long lastCommandPoll = 0;
@@ -129,6 +136,73 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   display->print(label);
 }
 
+const command_field::Rect& activeCommandFieldBounds() {
+  return commandFieldEditing ? command_field::kEditingBounds : command_field::kNormalBounds;
+}
+
+void drawCommandField() {
+  if (!displayReady) return;
+
+  const command_field::Rect bounds = activeCommandFieldBounds();
+  const int contentX = bounds.left + command_field::kHorizontalPadding;
+  const int contentY = bounds.top + command_field::kVerticalPadding;
+  const int contentRight = bounds.right - command_field::kHorizontalPadding;
+  const int contentWidth = contentRight - contentX;
+
+  const uint16_t fill = color565(7, 13, 23);
+  const uint16_t border = commandFieldFocused ? color565(120, 205, 255)
+                                              : color565(110, 135, 155);
+  const uint16_t textColor = color565(235, 242, 248);
+
+  display->fillRoundRect(bounds.left, bounds.top, bounds.width(), bounds.height(), 10, fill);
+  display->drawRoundRect(bounds.left, bounds.top, bounds.width(), bounds.height(), 10, border);
+  display->setTextSize(2);
+  display->setTextColor(commandFieldText.length() ? textColor : color565(135, 150, 165));
+
+  // Keep rendering strictly left-anchored. Long commands are clipped from the
+  // right instead of being re-centered, which makes the insertion point
+  // stable as the text changes.
+  String visibleText = commandFieldText;
+  while (visibleText.length()) {
+    int16_t x1 = 0;
+    int16_t y1 = 0;
+    uint16_t measuredWidth = 0;
+    uint16_t measuredHeight = 0;
+    display->getTextBounds(visibleText, contentX, contentY, &x1, &y1,
+                           &measuredWidth, &measuredHeight);
+    if (static_cast<int>(measuredWidth) + command_field::kCursorWidth <= contentWidth) break;
+    visibleText.remove(visibleText.length() - 1);
+  }
+
+  if (!visibleText.length()) {
+    display->setCursor(contentX, contentY);
+    display->print(commandFieldText.length() ? "..." : "Escriba una orden...");
+  } else {
+    display->setCursor(contentX, contentY);
+    display->print(visibleText);
+  }
+
+  // The cursor is intentionally drawn as a physical pixel primitive instead
+  // of relying on centered text metrics. It remains inside the field box.
+  if (commandFieldFocused) {
+    const size_t safeCursor = command_field::clampCursor(commandFieldCursor, commandFieldText.length());
+    const size_t visibleCursor = safeCursor < visibleText.length() ? safeCursor : visibleText.length();
+    const String prefix = visibleText.substring(0, visibleCursor);
+    int16_t x1 = 0;
+    int16_t y1 = 0;
+    uint16_t prefixWidth = 0;
+    uint16_t prefixHeight = 0;
+    display->getTextBounds(prefix, contentX, contentY, &x1, &y1, &prefixWidth, &prefixHeight);
+    const int cursorX = contentX + static_cast<int>(prefixWidth);
+    const int cursorTop = contentY - 2;
+    const int cursorBottom = bounds.bottom - command_field::kVerticalPadding;
+    if (cursorX < contentRight && cursorTop >= bounds.top && cursorBottom <= bounds.bottom) {
+      display->fillRect(cursorX, cursorTop, command_field::kCursorWidth,
+                        cursorBottom - cursorTop, color565(255, 255, 255));
+    }
+  }
+}
+
 void drawPanel() {
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
@@ -156,12 +230,14 @@ void drawPanel() {
     display->fillCircle(338, 141, 13, background);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
-  String detail = panelDetail;
-  if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
-  if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+  if (commandFieldEditing) {
+    drawCommandField();
+  } else {
+    drawCentered(stateLabel(panelState), 250, 2, WHITE);
+    String detail = panelDetail;
+    if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
+    drawCentered(detail, 286, 1, color565(210, 225, 235));
+    drawCommandField();
   }
 
   drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
@@ -469,9 +545,17 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+  if (sample.touched && !touchDown) {
+    const command_field::Rect bounds = activeCommandFieldBounds();
+    if (bounds.contains(sample.x, sample.y)) {
+      commandFieldFocused = true;
+      commandFieldCursor = command_field::clampCursor(commandFieldCursor, commandFieldText.length());
+      drawPanel();
+    } else if (sample.y >= 370) {
+      commandFieldFocused = false;
+      if (sample.x < 240) checkBackendHealth();
+      else send3CCommand(commandFieldText);
+    }
   }
   touchDown = sample.touched;
 }
@@ -482,6 +566,9 @@ void setup() {
   delay(250);
   Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\n",
     psramFound() ? "OK" : "NO", ESP.getPsramSize());
+
+  commandFieldText = app_config::defaultCommand;
+  commandFieldCursor = commandFieldText.length();
 
   displayReady = initializeDisplay();
   if (!displayReady) Serial.println("No se pudo inicializar la pantalla ST7701.");
