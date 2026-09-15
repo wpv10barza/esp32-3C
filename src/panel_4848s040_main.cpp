@@ -30,21 +30,16 @@ constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
+constexpr int kUiButtonY = 360;
+constexpr int kUiButtonHeight = 94;
+constexpr int kUiFooterY = 458;
+constexpr int kUiFooterHeight = kScreenHeight - kUiFooterY;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
 Arduino_RGB_Display* display = nullptr;
 
-enum class PanelState {
-  Booting,
-  Offline,
-  Ready,
-  Busy,
-  Pending,
-  Applied,
-  Rejected,
-  Error,
-};
+enum class PanelState { Booting, Offline, Ready, Busy, Pending, Applied, Rejected, Error };
 
 PanelState panelState = PanelState::Booting;
 String panelDetail = "Iniciando";
@@ -133,6 +128,7 @@ void drawPanel() {
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+  const uint16_t footerBackground = color565(20, 42, 55);
   display->fillScreen(background);
   drawCentered("ASISTENTE 3C", 18, 2, color565(170, 220, 255));
 
@@ -164,8 +160,14 @@ void drawPanel() {
     drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(20, kUiButtonY, 210, kUiButtonHeight, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(250, kUiButtonY, 210, kUiButtonHeight, "ENVIAR 3C", color565(18, 105, 73));
+
+  // The LCD is 480x480. Paint the final 22 rows explicitly instead of leaving
+  // an unstructured dark band below the touch buttons.
+  display->fillRect(0, kUiFooterY, kScreenWidth, kUiFooterHeight, footerBackground);
+  display->drawFastHLine(0, kUiFooterY, kScreenWidth, color565(95, 180, 205));
+  drawCentered("TOQUE ACTIVO", 463, 1, color565(205, 235, 245));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
