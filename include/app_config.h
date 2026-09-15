@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 
-// Keep personal values in include/local_config.h. That file is ignored by Git.
 #if __has_include("local_config.h")
 #include "local_config.h"
 #endif
@@ -10,20 +9,15 @@
 #ifndef WIFI_SSID_VALUE
 #define WIFI_SSID_VALUE ""
 #endif
-
 #ifndef WIFI_PASSWORD_VALUE
 #define WIFI_PASSWORD_VALUE ""
 #endif
-
-// Use the Windows LAN IPv4 that exposes WSL, never 127.0.0.1.
 #ifndef ASSISTANT_BASE_URL_VALUE
 #define ASSISTANT_BASE_URL_VALUE "http://192.168.1.50:3000"
 #endif
-
 #ifndef ESP32_API_TOKEN_VALUE
 #define ESP32_API_TOKEN_VALUE ""
 #endif
-
 #ifndef DEVICE_ID_VALUE
 #if defined(BOARD_PANEL_4848S040)
 #define DEVICE_ID_VALUE "panel-4848s040-3c-01"
@@ -31,17 +25,12 @@
 #define DEVICE_ID_VALUE "esp-hi-3c-01"
 #endif
 #endif
-
 #ifndef DEFAULT_3C_COMMAND_VALUE
 #define DEFAULT_3C_COMMAND_VALUE "Cambia la tarea J10 a mensual"
 #endif
-
-// This board uses GPIO 1/2/40 either for the NS4168-compatible I2S amplifier
-// or for relays, depending on the assembled version. Set to 0 for relay units.
 #ifndef PANEL_AUDIO_ENABLED_VALUE
 #define PANEL_AUDIO_ENABLED_VALUE 1
 #endif
-
 #ifndef PANEL_BRIGHTNESS_VALUE
 #define PANEL_BRIGHTNESS_VALUE 180
 #endif
@@ -53,12 +42,22 @@ static constexpr char assistantBaseUrl[] = ASSISTANT_BASE_URL_VALUE;
 static constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
 static constexpr char deviceId[] = DEVICE_ID_VALUE;
 
-// Runtime source of truth for the command sent by ENVIAR 3C.
-// The default is only the initial buffer contents; input handling may replace it.
-static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;
+// Runtime source of truth for commands. It starts with the configured default,
+// but the touchscreen editor may replace it after a successful confirmation.
+class RuntimeCommandBuffer : public String {
+ public:
+  using String::String;
 
-// Backward-compatible alias. New code must read/write commandBuffer instead.
-static String& defaultCommand = commandBuffer;
+  bool set(const char* text) {
+    if (text == nullptr) return false;
+    *this = text;
+    return true;
+  }
+};
+
+static RuntimeCommandBuffer commandBuffer(DEFAULT_3C_COMMAND_VALUE);
+// Compatibility alias retained for older call sites; new code uses commandBuffer.
+static RuntimeCommandBuffer& defaultCommand = commandBuffer;
 
 static constexpr bool panelAudioEnabled = PANEL_AUDIO_ENABLED_VALUE != 0;
 static constexpr uint8_t panelBrightness = PANEL_BRIGHTNESS_VALUE;
