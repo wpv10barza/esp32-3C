@@ -105,14 +105,3 @@ void test_spanning_controls_have_full_expected_width() {
   TEST_ASSERT_EQUAL_INT(2 * kKeyWidth + kColumnGap,
                         toggle->rect.right - toggle->rect.left);
 }
-
-int main(int argc, char** argv) {
-  UNITY_BEGIN();
-  RUN_TEST(test_alpha_layout_is_inside_screen_and_non_overlapping);
-  RUN_TEST(test_numeric_layout_is_inside_screen_and_non_overlapping);
-  RUN_TEST(test_alpha_has_requested_edit_controls);
-  RUN_TEST(test_numeric_has_requested_edit_controls);
-  RUN_TEST(test_hit_test_uses_unambiguous_boundaries);
-  RUN_TEST(test_spanning_controls_have_full_expected_width);
-  return UNITY_END();
-}
