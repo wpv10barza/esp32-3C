@@ -13,7 +13,7 @@ constexpr int kScreenHeight = 480;
 constexpr int kKeyboardX = 5;
 constexpr int kKeyboardY = 216;
 constexpr int kKeyboardWidth = 470;
-constexpr int kKeyboardHeight = 208;
+constexpr int kKeyboardHeight = 204;
 constexpr int kColumns = 10;
 constexpr int kRows = 4;
 constexpr int kColumnGap = 4;
@@ -153,7 +153,7 @@ inline size_t buildKeys(KeyboardMode mode, Key* out, size_t capacity) {
 }
 
 inline int hitTestIndex(KeyboardMode mode, int x, int y) {
-  std::array<Key, 50> keys{};
+  std::array<Key, 40> keys{};
   const size_t count = buildKeys(mode, keys.data(), keys.size());
   for (size_t index = 0; index < count; ++index) {
     if (keys[index].rect.contains(x, y)) return static_cast<int>(index);
@@ -162,9 +162,9 @@ inline int hitTestIndex(KeyboardMode mode, int x, int y) {
 }
 
 inline bool hitTest(KeyboardMode mode, int x, int y, Key* matched = nullptr) {
-  std::array<Key, 50> keys{};
+  std::array<Key, 40> keys{};
   const size_t count = buildKeys(mode, keys.data(), keys.size());
-  std::array<touch::KeyFrame, 50> frames{};
+  std::array<touch::KeyFrame, 40> frames{};
   for (size_t index = 0; index < count; ++index) {
     frames[index] = {keys[index].rect.left, keys[index].rect.top,
                      static_cast<int16_t>(keys[index].rect.right - keys[index].rect.left),
