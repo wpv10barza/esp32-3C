@@ -26,10 +26,13 @@ static_assert(kKeyboardY + kKeyboardHeight <= kScreenHeight, "keyboard must stay
 static_assert(kRows * kKeyHeight + (kRows - 1) * kRowGap == kKeyboardHeight, "keyboard rows must fill frame");
 
 struct KeyRect {
-  int16_t left = 0;
-  int16_t top = 0;
-  int16_t right = 0;
-  int16_t bottom = 0;
+  int16_t left;
+  int16_t top;
+  int16_t right;
+  int16_t bottom;
+
+  constexpr KeyRect(int16_t leftValue, int16_t topValue, int16_t rightValue, int16_t bottomValue)
+      : left(leftValue), top(topValue), right(rightValue), bottom(bottomValue) {}
 
   constexpr bool contains(int x, int y) const {
     return x >= left && x < right && y >= top && y < bottom;
@@ -76,8 +79,9 @@ constexpr KeyRect makeRect(const KeyDefinition& definition, uint8_t row) {
   const int left = columnOrigin(definition.startColumn);
   const int width = static_cast<int>(definition.spanColumns) * kKeyWidth +
                     static_cast<int>(definition.spanColumns - 1) * kColumnGap;
-  return {static_cast<int16_t>(left), static_cast<int16_t>(rowOrigin(row)),
-          static_cast<int16_t>(left + width), static_cast<int16_t>(rowOrigin(row) + kKeyHeight)};
+  return KeyRect(static_cast<int16_t>(left), static_cast<int16_t>(rowOrigin(row)),
+                 static_cast<int16_t>(left + width),
+                 static_cast<int16_t>(rowOrigin(row) + kKeyHeight));
 }
 
 namespace detail {
@@ -146,7 +150,7 @@ inline size_t buildKeys(KeyboardMode mode, Key* out, size_t capacity) {
     for (size_t index = 0; index < definitions.count; ++index) {
       if (written >= capacity) return written;
       const KeyDefinition& definition = definitions.definitions[index];
-      out[written++] = {definition, makeRect(definition, row)};
+      out[written++] = Key{definition, makeRect(definition, row)};
     }
   }
   return written;
@@ -166,9 +170,9 @@ inline bool hitTest(KeyboardMode mode, int x, int y, Key* matched = nullptr) {
   const size_t count = buildKeys(mode, keys.data(), keys.size());
   std::array<touch::KeyFrame, 40> frames{};
   for (size_t index = 0; index < count; ++index) {
-    frames[index] = {keys[index].rect.left, keys[index].rect.top,
-                     static_cast<int16_t>(keys[index].rect.right - keys[index].rect.left),
-                     static_cast<int16_t>(keys[index].rect.bottom - keys[index].rect.top)};
+    frames[index] = touch::KeyFrame(keys[index].rect.left, keys[index].rect.top,
+                                    static_cast<int16_t>(keys[index].rect.right - keys[index].rect.left),
+                                    static_cast<int16_t>(keys[index].rect.bottom - keys[index].rect.top));
   }
   const size_t match = touch::hitTest(frames.data(), count, x, y);
   if (match == touch::kNoKey) return false;
