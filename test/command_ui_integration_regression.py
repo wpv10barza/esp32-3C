@@ -13,13 +13,19 @@ def test_runtime_command_buffer_is_shared_contract():
     assert "static String& defaultCommand = commandBuffer;" in CONFIG
 
 
-def test_panel_uses_single_editor_buffer_and_no_default_send():
+def test_panel_uses_single_editor_buffer_and_syncs_runtime_command():
     assert '#include "command_buffer.h"' in PANEL
+    assert '#include "command_text_viewport.h"' in PANEL
+    assert '#include "command_field.h"' in PANEL
     assert '#include "editing_command_state.h"' in PANEL
     assert "Command commandBuffer;" in PANEL
     assert "EditingCommandState<kCommandCapacity> commandEditor(commandBuffer);" in PANEL
+    assert "app_config::commandBuffer.set(commandBuffer.c_str())" in PANEL
+    assert "send3CCommand(app_config::commandBuffer);" in PANEL
     assert "send3CCommand(app_config::defaultCommand);" not in PANEL
-    assert "send3CCommand(commandBuffer.c_str());" in PANEL
+    assert "beginCommandEditing" in PANEL
+    assert "commandEditor.ok()" in PANEL
+    assert "commandEditor.cancel()" in PANEL
 
 
 def test_other_firmware_target_still_uses_runtime_command_buffer():
@@ -40,7 +46,7 @@ def test_shared_touch_keyboard_path_is_present():
 
 if __name__ == "__main__":
     test_runtime_command_buffer_is_shared_contract()
-    test_panel_uses_single_editor_buffer_and_no_default_send()
+    test_panel_uses_single_editor_buffer_and_syncs_runtime_command()
     test_other_firmware_target_still_uses_runtime_command_buffer()
     test_shared_touch_keyboard_path_is_present()
     print("command UI static integration checks: PASS")
