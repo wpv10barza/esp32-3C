@@ -11,6 +11,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "panel_ui.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -28,8 +29,6 @@ namespace {
 constexpr uint8_t kTouchAddress = 0x5D;
 constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
-constexpr int kScreenWidth = 480;
-constexpr int kScreenHeight = 480;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
@@ -107,25 +106,54 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
   uint16_t height = 0;
   display->setTextSize(size);
   display->getTextBounds(text, 0, y, &x1, &y1, &width, &height);
-  int x = (kScreenWidth - static_cast<int>(width)) / 2;
-  if (x < 4) x = 4;
+  int x = (panel_ui::kScreenWidth - static_cast<int>(width)) / 2;
+  if (x < panel_ui::kScreenMargin) x = panel_ui::kScreenMargin;
+  if (x + static_cast<int>(width) > panel_ui::kScreenWidth - panel_ui::kScreenMargin) {
+    x = panel_ui::kScreenWidth - panel_ui::kScreenMargin - static_cast<int>(width);
+  }
+  if (x < 0) x = 0;
   display->setTextColor(color);
   display->setCursor(x, y);
   display->print(text);
 }
 
-void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
+void drawCenteredFitted(const String& text, int y, uint8_t preferredSize, int maxWidth, uint16_t color) {
   if (!displayReady) return;
-  display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
+  uint8_t size = preferredSize;
+  int16_t x1 = 0;
+  int16_t y1 = 0;
+  uint16_t width = 0;
+  uint16_t height = 0;
+  do {
+    display->setTextSize(size);
+    display->getTextBounds(text, 0, y, &x1, &y1, &width, &height);
+    if (static_cast<int>(width) <= maxWidth || size == 1) break;
+    --size;
+  } while (size > 1);
+  const int x = (panel_ui::kScreenWidth - static_cast<int>(width)) / 2;
+  display->setTextColor(color);
+  display->setCursor(x < 0 ? 0 : x, y);
+  display->print(text);
+}
+
+void drawButton(const panel_ui::Rect& rect, const char* label, uint16_t fill) {
+  if (!displayReady) return;
+  display->fillRoundRect(rect.x, rect.y, rect.width, rect.height, 18, fill);
+  display->drawRoundRect(rect.x, rect.y, rect.width, rect.height, 18, color565(185, 210, 230));
   display->setTextSize(2);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
   uint16_t textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  if (textWidth > static_cast<uint16_t>(rect.width - 24)) {
+    display->setTextSize(1);
+    display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  }
+  const int textX = rect.x + (rect.width - static_cast<int>(textWidth)) / 2;
+  const int textY = rect.y + (rect.height - static_cast<int>(textHeight)) / 2;
   display->setTextColor(WHITE);
-  display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
+  display->setCursor(textX < rect.x + 8 ? rect.x + 8 : textX, textY);
   display->print(label);
 }
 
@@ -156,7 +184,7 @@ void drawPanel() {
     display->fillCircle(338, 141, 13, background);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  drawCenteredFitted(stateLabel(panelState), 250, 2, panel_ui::kScreenWidth - (panel_ui::kScreenMargin * 2), WHITE);
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
   drawCentered(detail, 286, 1, color565(210, 225, 235));
@@ -164,8 +192,8 @@ void drawPanel() {
     drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(panel_ui::kLeftButton, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(panel_ui::kRightButton, "ENVIAR 3C", color565(18, 105, 73));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -243,11 +271,13 @@ bool initializeDisplay() {
     8, 20, 3, 46, 9, 10,
     4, 5, 6, 7, 15,
     1, 10, 8, 50,
-    1, 10, 8, 20);
+    1, 10, 8, 20,
+    0, 12000000, false,
+    0, 0, 0);
   display = new Arduino_RGB_Display(
-    kScreenWidth, kScreenHeight, rgbPanel, 0, true,
+    panel_ui::kScreenWidth, panel_ui::kScreenHeight, rgbPanel, 0, true,
     displayBus, GFX_NOT_DEFINED,
-    tl040wvs03_init_operations, sizeof(tl040wvs03_init_operations));
+    st7701_type9_init_operations, sizeof(st7701_type9_init_operations));
   if (!display->begin()) return false;
   pinMode(pins::backlight, OUTPUT);
   analogWrite(pins::backlight, app_config::panelBrightness);
@@ -284,8 +314,9 @@ TouchSample readTouch() {
     if (i2cRead(kTouchPointRegister, data, sizeof(data))) {
       const uint16_t rawX = data[1] | (static_cast<uint16_t>(data[2]) << 8);
       const uint16_t rawY = data[3] | (static_cast<uint16_t>(data[4]) << 8);
-      sample.x = rawX < kScreenWidth ? kScreenWidth - 1 - rawX : 0;
-      sample.y = rawY < kScreenHeight ? kScreenHeight - 1 - rawY : 0;
+      // GT911 on this 4848S040 population reports the origin at bottom-right.
+      sample.x = rawX < panel_ui::kScreenWidth ? panel_ui::kScreenWidth - 1 - rawX : 0;
+      sample.y = rawY < panel_ui::kScreenHeight ? panel_ui::kScreenHeight - 1 - rawY : 0;
       sample.touched = true;
     }
   }
@@ -469,9 +500,13 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+  if (sample.touched && !touchDown) {
+    const panel_ui::TouchAction action = panel_ui::actionForTouch(sample.x, sample.y);
+    if (action == panel_ui::TouchAction::ProbarWSL) {
+      checkBackendHealth();
+    } else if (action == panel_ui::TouchAction::Enviar3C) {
+      send3CCommand(app_config::defaultCommand);
+    }
   }
   touchDown = sample.touched;
 }
