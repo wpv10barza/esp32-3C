@@ -9,8 +9,7 @@ namespace virtual_keyboard {
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
 
-// Geometry is based on a 10-column grid. The keyboard may occupy the
-// lower portion of the 480x480 panel while editing mode is active.
+// Bottom 256 px of the 480x480 display are reserved for editing controls.
 constexpr int kKeyboardX = 5;
 constexpr int kKeyboardY = 216;
 constexpr int kKeyboardWidth = 474;
@@ -23,12 +22,13 @@ constexpr int kKeyWidth = 43;
 constexpr int kKeyHeight = 48;
 
 static_assert(kKeyboardX + kKeyboardWidth == kScreenWidth - 1,
-              "keyboard must stay inside 480px screen");
+              "keyboard must stay inside the 480px screen");
 static_assert(kKeyboardY + kKeyboardHeight <= kScreenHeight,
-              "keyboard must stay inside 480px screen");
+              "keyboard must stay inside the 480px screen");
 
-// Coordinates use half-open rectangles: [left, right) x [top, bottom).
-// This gives every pixel to exactly one key at a boundary.
+// Rectangles are half-open: [left, right) x [top, bottom). This makes
+// boundary hit-testing deterministic and prevents adjacent keys from both
+// claiming the same touch point.
 struct KeyRect {
   int16_t left = 0;
   int16_t top = 0;
@@ -131,11 +131,18 @@ constexpr std::array<KeyDefinition, 10> kAlphaRow2 = {{
     {KeyKind::Character, "/", 9, 1},
 }};
 
-constexpr std::array<KeyDefinition, 4> kControlRow = {{
-    {KeyKind::ToggleAlphaNumeric, "123", 0, 2},
-    {KeyKind::Space, "SPACE", 2, 6},
-    {KeyKind::Enter, "ENTER", 8, 2},
-    {KeyKind::ToggleAlphaNumeric, "ABC", 0, 0}, // unused placeholder
+// Final alpha row provides common command/shell symbols before the controls.
+constexpr std::array<KeyDefinition, 10> kAlphaRow3 = {{
+    {KeyKind::Character, "-", 0, 1},
+    {KeyKind::Character, "_", 1, 1},
+    {KeyKind::Character, ":", 2, 1},
+    {KeyKind::Character, ";", 3, 1},
+    {KeyKind::Character, "@", 4, 1},
+    {KeyKind::Character, "#", 5, 1},
+    {KeyKind::Character, "=", 6, 1},
+    {KeyKind::Character, "+", 7, 1},
+    {KeyKind::Backspace, "BKSP", 8, 1},
+    {KeyKind::ToggleAlphaNumeric, "123", 9, 1},
 }};
 
 constexpr std::array<KeyDefinition, 10> kNumericRow0 = {{
@@ -174,7 +181,7 @@ constexpr std::array<KeyDefinition, 10> kNumericRow2 = {{
     {KeyKind::Character, ":", 6, 1},
     {KeyKind::Character, ";", 7, 1},
     {KeyKind::Character, "'", 8, 1},
-    {KeyKind::Backspace, "BKSP", 9, 1},
+    {KeyKind::Character, "\"", 9, 1},
 }};
 
 constexpr std::array<KeyDefinition, 10> kNumericRow3 = {{
@@ -187,24 +194,26 @@ constexpr std::array<KeyDefinition, 10> kNumericRow3 = {{
     {KeyKind::Character, "`", 6, 1},
     {KeyKind::Character, "\\", 7, 1},
     {KeyKind::Character, ".", 8, 1},
-    {KeyKind::Character, ",", 9, 1},
+    {KeyKind::Backspace, "BKSP", 9, 1},
 }};
 
-constexpr std::array<KeyDefinition, 3> kAlphaControlRow = {{
+constexpr std::array<KeyDefinition, 5> kAlphaControlRow = {{
     {KeyKind::ToggleAlphaNumeric, "123", 0, 2},
-    {KeyKind::Space, "SPACE", 2, 6},
-    {KeyKind::Enter, "ENTER", 8, 2},
+    {KeyKind::Space, "SPACE", 2, 5},
+    {KeyKind::Enter, "ENTER", 7, 3},
+    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
+    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
 }};
 
-constexpr std::array<KeyDefinition, 3> kNumericControlRow = {{
+constexpr std::array<KeyDefinition, 5> kNumericControlRow = {{
     {KeyKind::ToggleAlphaNumeric, "ABC", 0, 2},
-    {KeyKind::Space, "SPACE", 2, 6},
-    {KeyKind::Enter, "ENTER", 8, 2},
+    {KeyKind::Space, "SPACE", 2, 5},
+    {KeyKind::Enter, "ENTER", 7, 3},
+    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
+    {KeyKind::ToggleAlphaNumeric, "", 0, 0},
 }};
 
 }  // namespace detail
-
-constexpr size_t rowCount(KeyboardMode) { return kRows; }
 
 inline Row rowDefinition(KeyboardMode mode, uint8_t row) {
   if (mode == KeyboardMode::Alpha) {
@@ -212,7 +221,8 @@ inline Row rowDefinition(KeyboardMode mode, uint8_t row) {
       case 0: return {detail::kAlphaRow0.data(), detail::kAlphaRow0.size()};
       case 1: return {detail::kAlphaRow1.data(), detail::kAlphaRow1.size()};
       case 2: return {detail::kAlphaRow2.data(), detail::kAlphaRow2.size()};
-      case 3: return {detail::kAlphaControlRow.data(), detail::kAlphaControlRow.size()};
+      case 3: return {detail::kAlphaRow3.data(), detail::kAlphaRow3.size()};
+      case 4: return {detail::kAlphaControlRow.data(), 3};
       default: return {nullptr, 0};
     }
   }
@@ -222,14 +232,16 @@ inline Row rowDefinition(KeyboardMode mode, uint8_t row) {
     case 1: return {detail::kNumericRow1.data(), detail::kNumericRow1.size()};
     case 2: return {detail::kNumericRow2.data(), detail::kNumericRow2.size()};
     case 3: return {detail::kNumericRow3.data(), detail::kNumericRow3.size()};
-    case 4: return {detail::kNumericControlRow.data(), detail::kNumericControlRow.size()};
+    case 4: return {detail::kNumericControlRow.data(), 3};
     default: return {nullptr, 0};
   }
 }
 
 inline size_t keyCount(KeyboardMode mode) {
   size_t total = 0;
-  for (uint8_t row = 0; row < kRows; ++row) total += rowDefinition(mode, row).count;
+  for (uint8_t row = 0; row < kRows; ++row) {
+    total += rowDefinition(mode, row).count;
+  }
   return total;
 }
 
