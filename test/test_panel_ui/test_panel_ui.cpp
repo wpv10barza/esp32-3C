@@ -42,14 +42,12 @@ void test_gap_and_outside_area_do_not_trigger() {
   TEST_ASSERT_EQUAL(panel_ui::TouchAction::None, panel_ui::actionForTouch(480, 400));
 }
 
-void setup() {
+int main() {
   UNITY_BEGIN();
   RUN_TEST(test_screen_geometry_is_480x480);
   RUN_TEST(test_touch_targets_are_inside_screen_and_disjoint);
   RUN_TEST(test_left_target_maps_only_to_wsl);
   RUN_TEST(test_right_target_maps_only_to_3c);
   RUN_TEST(test_gap_and_outside_area_do_not_trigger);
-  UNITY_END();
+  return UNITY_END();
 }
-
-void loop() {}
