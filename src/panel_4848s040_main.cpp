@@ -18,6 +18,7 @@
 #include "command_text_viewport.h"
 #include "command_field.h"
 #include "editing_command_state.h"
+#include "touch_key_feedback.h"
 #include "touch_priority_dispatch.h"
 #include "virtual_keyboard.h"
 
@@ -40,6 +41,8 @@ constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
 constexpr int kCommandCapacity = 48;
+constexpr uint32_t kKeyDebounceMs = 70;
+constexpr uint32_t kKeyHighlightMs = 90;
 constexpr touch_priority::Rect kCancelButton{20, 432, 230, 472};
 constexpr touch_priority::Rect kConfirmButton{250, 432, 460, 472};
 
@@ -52,6 +55,8 @@ Arduino_RGB_Display* display = nullptr;
 Command commandBuffer;
 EditingCommandState<kCommandCapacity> commandEditor(commandBuffer);
 virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+touch_key_feedback::Debouncer keyDebouncer(kKeyDebounceMs);
+touch_key_feedback::Highlight keyHighlight(kKeyHighlightMs);
 
 bool displayReady = false;
 bool audioReady = false;
@@ -234,19 +239,35 @@ void drawCommandField(const command_field::Rect& bounds, bool editing) {
   }
 }
 
+int keyboardKeyIndexAt(virtual_keyboard::KeyboardMode mode, int x, int y) {
+  virtual_keyboard::Key keys[50] = {};
+  const size_t count = virtual_keyboard::buildKeys(mode, keys, 50);
+  for (size_t index = 0; index < count; ++index) {
+    if (keys[index].rect.contains(x, y)) return static_cast<int>(index);
+  }
+  return -1;
+}
+
 void drawKeyboard() {
   if (!displayReady) return;
   virtual_keyboard::Key keys[50] = {};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
+  const uint32_t nowMs = millis();
   for (size_t index = 0; index < count; ++index) {
     const auto& key = keys[index];
-    const uint16_t fill = key.definition.kind == virtual_keyboard::KeyKind::Character
-                              ? color565(25, 52, 72)
-                              : color565(68, 64, 24);
+    const bool highlighted = keyHighlight.active(static_cast<int>(index), nowMs);
+    uint16_t fill = key.definition.kind == virtual_keyboard::KeyKind::Character
+                        ? color565(25, 52, 72)
+                        : color565(68, 64, 24);
+    uint16_t border = color565(105, 135, 155);
+    if (highlighted) {
+      fill = color565(92, 118, 150);
+      border = WHITE;
+    }
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
                            key.rect.bottom - key.rect.top, 6, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 6, color565(105, 135, 155));
+                           key.rect.bottom - key.rect.top, 6, border);
     display->setTextSize(key.definition.kind == virtual_keyboard::KeyKind::Character ? 2 : 1);
     display->setTextColor(WHITE);
     int16_t x1 = 0;
@@ -325,6 +346,21 @@ void playTone(uint16_t frequency, uint16_t durationMs) {
     frame += frames;
   }
   i2s_zero_dma_buffer(I2S_NUM_0);
+}
+
+void playKeyTone(virtual_keyboard::KeyKind kind) {
+  if (!audioReady || !app_config::panelAudioEnabled) return;
+  switch (kind) {
+    case virtual_keyboard::KeyKind::Character: playTone(1047, 14); break;
+    case virtual_keyboard::KeyKind::Backspace: playTone(784, 18); break;
+    case virtual_keyboard::KeyKind::Space: playTone(920, 12); break;
+    case virtual_keyboard::KeyKind::Clear: playTone(523, 20); break;
+    case virtual_keyboard::KeyKind::CursorLeft:
+    case virtual_keyboard::KeyKind::CursorRight: playTone(880, 12); break;
+    case virtual_keyboard::KeyKind::ToggleAlphaNumeric: playTone(740, 16); break;
+    case virtual_keyboard::KeyKind::Enter: playTone(1319, 24); break;
+    case virtual_keyboard::KeyKind::DeleteForward: playTone(698, 18); break;
+  }
 }
 
 void updatePanel(PanelState state, const String& detail, bool sound = false) {
@@ -578,6 +614,8 @@ void configureWebServer() {
 void beginCommandEditing() {
   if (!commandEditor.begin()) return;
   keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+  keyDebouncer.reset();
+  keyHighlight.clear();
   suppressTouchUntilRelease = true;
   drawPanel();
 }
@@ -586,6 +624,8 @@ bool commitAndSendCommand() {
   if (!commandEditor.isEditing() || commandEditor.draft().length() == 0) return false;
   if (!commandEditor.ok()) return false;
   if (!app_config::commandBuffer.set(commandBuffer.c_str())) return false;
+  keyDebouncer.reset();
+  keyHighlight.clear();
   suppressTouchUntilRelease = true;
   send3CCommand(app_config::commandBuffer);
   drawPanel();
@@ -595,6 +635,8 @@ bool commitAndSendCommand() {
 void cancelCommandEditing() {
   if (!commandEditor.isEditing()) return;
   if (!commandEditor.cancel()) return;
+  keyDebouncer.reset();
+  keyHighlight.clear();
   suppressTouchUntilRelease = true;
   drawPanel();
 }
@@ -617,8 +659,14 @@ void handleEditingTouch(const TouchSample& sample) {
     return;
   }
 
+  const int keyIndex = keyboardKeyIndexAt(keyboardMode, sample.x, sample.y);
+  if (keyIndex < 0 || !keyDebouncer.press(keyIndex, millis())) return;
+
   virtual_keyboard::Key key{};
   if (!virtual_keyboard::hitTest(keyboardMode, sample.x, sample.y, &key)) return;
+  keyHighlight.press(keyIndex, millis());
+  playKeyTone(key.definition.kind);
+
   const auto kind = key.definition.kind;
   switch (kind) {
     case virtual_keyboard::KeyKind::Character:
@@ -657,6 +705,8 @@ void handleEditingTouch(const TouchSample& sample) {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
+
+  if (!sample.touched) keyDebouncer.release();
 
   if (suppressTouchUntilRelease) {
     if (!sample.touched) {
@@ -710,6 +760,11 @@ void setup() {
 void loop() {
   web.handleClient();
   handleTouch();
+
+  if (commandEditor.isEditing() && keyHighlight.expired(millis())) {
+    keyHighlight.clear();
+    drawPanel();
+  }
 
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiAnnounced) {
