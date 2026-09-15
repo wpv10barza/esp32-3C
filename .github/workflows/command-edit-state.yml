@@ -1,0 +1,22 @@
+name: Command editing state
+
+on:
+  push:
+    branches: [main, feature/editing-command-state]
+  pull_request:
+
+jobs:
+  command-edit-state:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build unit test
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            tests/test_command_edit_state.cpp \
+            -o /tmp/test_command_edit_state
+
+      - name: Run unit test
+        run: /tmp/test_command_edit_state
