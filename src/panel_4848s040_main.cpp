@@ -16,6 +16,7 @@
 #include "app_config.h"
 #include "command_buffer.h"
 #include "command_text_viewport.h"
+#include "command_field.h"
 #include "editing_command_state.h"
 #include "touch_priority_dispatch.h"
 #include "virtual_keyboard.h"
@@ -39,9 +40,6 @@ constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
 constexpr int kCommandCapacity = 48;
-
-constexpr command_field::Rect kNormalCommandField{18, 312, 462, 360};
-constexpr command_field::Rect kEditingCommandField{18, 18, 462, 72};
 constexpr touch_priority::Rect kCancelButton{20, 432, 230, 472};
 constexpr touch_priority::Rect kConfirmButton{250, 432, 460, 472};
 
@@ -177,7 +175,7 @@ size_t cursorFromFieldTouch(int x) {
   uint16_t prefix[kCommandCapacity + 1] = {};
   buildPrefixWidths(prefix);
   const size_t length = commandEditor.draft().length();
-  const int left = kEditingCommandField.left + command_field::kHorizontalPadding;
+  const int left = command_field::kEditingBounds.left + command_field::kHorizontalPadding;
   const int target = x - left;
   if (target <= 0 || length == 0) return 0;
   size_t cursor = 0;
@@ -215,13 +213,14 @@ void drawCommandField(const command_field::Rect& bounds, bool editing) {
     display->setTextColor(color565(135, 150, 165));
     display->setCursor(contentX, contentY);
     display->print(editing ? "Escriba una orden..." : "Sin orden");
+    if (editing) display->fillRect(contentX, contentY - 2, command_field::kCursorWidth,
+                                   bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
   } else {
     String visible = commandEditor.draft().c_str();
     visible = visible.substring(view.first, view.last);
     display->setTextColor(color565(235, 242, 248));
     display->setCursor(contentX, contentY);
     display->print(visible);
-
     if (editing) {
       const int cursorX = contentX + view.cursorX;
       if (cursorX < contentRight) {
@@ -238,8 +237,9 @@ void drawKeyboard() {
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 40);
   for (size_t index = 0; index < count; ++index) {
     const auto& key = keys[index];
-    uint16_t fill = color565(25, 52, 72);
-    if (key.definition.kind != virtual_keyboard::KeyKind::Character) fill = color565(68, 64, 24);
+    const uint16_t fill = key.definition.kind == virtual_keyboard::KeyKind::Character
+                              ? color565(25, 52, 72)
+                              : color565(68, 64, 24);
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
                            key.rect.bottom - key.rect.top, 6, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
@@ -281,7 +281,7 @@ void drawNormalPanel() {
   drawCentered(detail, 286, 1, color565(210, 225, 235));
   if (WiFi.status() == WL_CONNECTED) drawCentered(WiFi.localIP().toString(), 298, 1, color565(150, 205, 235));
 
-  drawCommandField(kNormalCommandField, false);
+  drawCommandField(command_field::kNormalBounds, false);
   drawButton(touch_priority::kProbeWslButton, "PROBAR WSL", color565(15, 82, 135));
   drawButton(touch_priority::kSend3CButton, "ENVIAR 3C", color565(18, 105, 73));
 }
@@ -289,7 +289,7 @@ void drawNormalPanel() {
 void drawEditingPanel() {
   display->fillScreen(color565(9, 18, 30));
   drawCentered("EDITAR COMANDO", 8, 2, color565(170, 220, 255));
-  drawCommandField(kEditingCommandField, true);
+  drawCommandField(command_field::kEditingBounds, true);
   drawKeyboard();
   drawButton(kCancelButton, "CANCELAR", color565(90, 45, 45), 1);
   drawButton(kConfirmButton, "CONFIRMAR", color565(18, 105, 73), 1);
@@ -579,10 +579,19 @@ void beginCommandEditing() {
   drawPanel();
 }
 
-void finishCommandEditing(bool commit) {
+bool commitAndSendCommand() {
+  if (!commandEditor.isEditing() || commandEditor.draft().empty()) return false;
+  if (!commandEditor.ok()) return false;
+  if (!app_config::commandBuffer.set(commandBuffer.c_str())) return false;
+  suppressTouchUntilRelease = true;
+  send3CCommand(app_config::commandBuffer);
+  drawPanel();
+  return true;
+}
+
+void cancelCommandEditing() {
   if (!commandEditor.isEditing()) return;
-  const bool changed = commit ? commandEditor.ok() : commandEditor.cancel();
-  if (!changed) return;
+  if (!commandEditor.cancel()) return;
   suppressTouchUntilRelease = true;
   drawPanel();
 }
@@ -591,23 +600,15 @@ void handleEditingTouch(const TouchSample& sample) {
   if (!sample.touched || touchDown) return;
 
   if (kCancelButton.contains(sample.x, sample.y)) {
-    finishCommandEditing(false);
+    cancelCommandEditing();
     return;
   }
   if (kConfirmButton.contains(sample.x, sample.y)) {
-    if (!commandEditor.draft().empty()) {
-      const bool committed = commandEditor.ok();
-      if (committed) {
-        suppressTouchUntilRelease = true;
-        const String command = commandBuffer.c_str();
-        send3CCommand(command);
-        drawPanel();
-      }
-    }
+    commitAndSendCommand();
     return;
   }
 
-  if (kEditingCommandField.contains(sample.x, sample.y)) {
+  if (command_field::kEditingBounds.contains(sample.x, sample.y)) {
     commandEditor.draft().setCursor(cursorFromFieldTouch(sample.x));
     drawPanel();
     return;
@@ -644,14 +645,8 @@ void handleEditingTouch(const TouchSample& sample) {
                          : virtual_keyboard::KeyboardMode::Alpha;
       break;
     case virtual_keyboard::KeyKind::Enter:
-      if (!commandEditor.draft().empty()) {
-        const bool committed = commandEditor.ok();
-        if (committed) {
-          suppressTouchUntilRelease = true;
-          send3CCommand(commandBuffer.c_str());
-        }
-      }
-      break;
+      commitAndSendCommand();
+      return;
   }
   drawPanel();
 }
@@ -698,7 +693,7 @@ void connectWifi() {
 void setup() {
   Serial.begin(115200);
   delay(250);
-  commandBuffer.set(app_config::defaultCommand);
+  commandBuffer.set(app_config::commandBuffer.c_str());
   displayReady = initializeDisplay();
   if (!displayReady) Serial.println("No se pudo inicializar la pantalla ST7701.");
   Wire.begin(pins::touchSda, pins::touchScl, 400000);
