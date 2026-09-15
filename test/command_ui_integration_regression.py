@@ -5,12 +5,14 @@ CONFIG = (ROOT / "include" / "app_config.h").read_text(encoding="utf-8")
 PANEL = (ROOT / "src" / "panel_4848s040_main.cpp").read_text(encoding="utf-8")
 ESP_HI = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
 VKEY = (ROOT / "include" / "virtual_keyboard.h").read_text(encoding="utf-8")
+FIELD = (ROOT / "include" / "command_field.h").read_text(encoding="utf-8")
 
 
 def test_runtime_command_buffer_is_shared_contract():
-    assert "static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;" in CONFIG
+    assert "class RuntimeCommandBuffer : public String" in CONFIG
+    assert "RuntimeCommandBuffer commandBuffer(DEFAULT_3C_COMMAND_VALUE);" in CONFIG
     assert "static constexpr char defaultCommand[]" not in CONFIG
-    assert "static String& defaultCommand = commandBuffer;" in CONFIG
+    assert "RuntimeCommandBuffer& defaultCommand = commandBuffer;" in CONFIG
 
 
 def test_panel_uses_single_editor_buffer_and_syncs_runtime_command():
@@ -42,6 +44,8 @@ def test_shared_touch_keyboard_path_is_present():
     assert "KeyKind::CursorLeft" in VKEY
     assert "KeyKind::CursorRight" in VKEY
     assert "KeyKind::Enter" in VKEY
+    assert "kEditingBounds" in FIELD
+    assert "kNormalBounds" in FIELD
 
 
 if __name__ == "__main__":
