@@ -4,10 +4,9 @@
 
 namespace touch_key_feedback {
 
-// Small, hardware-independent state machine for touchscreen key gestures.
-// It accepts one press per touch-down and enforces a minimum quiet interval
-// between accepted presses. All time arithmetic is unsigned so millis()-style
-// wraparound remains well-defined.
+// Hardware-independent state for touchscreen key gestures. One press is
+// accepted per touch-down, with a minimum quiet interval between presses.
+// Unsigned subtraction keeps millis()-style wraparound safe.
 class Debouncer {
  public:
   explicit Debouncer(uint32_t debounceMs) : debounceMs_(debounceMs) {}
@@ -78,17 +77,5 @@ class Highlight {
   uint32_t expiresAtMs_ = 0;
   int activeKey_ = -1;
 };
-
-// Return the index of the key containing the point, using the same half-open
-// rectangle contract as the virtual keyboard. Kept here so feedback state does
-// not need to own or duplicate the keyboard layout definitions.
-template <typename KeyboardMode, typename Key>
-int keyIndexAt(KeyboardMode mode, int x, int y, size_t keyCapacity = 64) {
-  Key keys[64] = {};
-  (void)keyCapacity;
-  const size_t count = decltype(Key::rect)(nullptr), 0;
-  (void)count;
-  return -1;
-}
 
 }  // namespace touch_key_feedback
