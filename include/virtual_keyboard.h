@@ -31,6 +31,7 @@ struct KeyRect {
   int16_t right;
   int16_t bottom;
 
+  constexpr KeyRect() : left(0), top(0), right(0), bottom(0) {}
   constexpr KeyRect(int16_t leftValue, int16_t topValue, int16_t rightValue, int16_t bottomValue)
       : left(leftValue), top(topValue), right(rightValue), bottom(bottomValue) {}
 
@@ -64,7 +65,13 @@ struct KeyDefinition {
   uint8_t spanColumns;
 };
 
-struct Key { KeyDefinition definition; KeyRect rect; };
+struct Key {
+  KeyDefinition definition;
+  KeyRect rect;
+  Key() : definition{KeyKind::Character, "", 0, 0}, rect() {}
+  Key(const KeyDefinition& value, const KeyRect& geometry) : definition(value), rect(geometry) {}
+};
+
 struct Row { const KeyDefinition* definitions; size_t count; };
 
 constexpr int columnOrigin(uint8_t column) {
@@ -80,8 +87,7 @@ constexpr KeyRect makeRect(const KeyDefinition& definition, uint8_t row) {
   const int width = static_cast<int>(definition.spanColumns) * kKeyWidth +
                     static_cast<int>(definition.spanColumns - 1) * kColumnGap;
   return KeyRect(static_cast<int16_t>(left), static_cast<int16_t>(rowOrigin(row)),
-                 static_cast<int16_t>(left + width),
-                 static_cast<int16_t>(rowOrigin(row) + kKeyHeight));
+                 static_cast<int16_t>(left + width), static_cast<int16_t>(rowOrigin(row) + kKeyHeight));
 }
 
 namespace detail {
@@ -150,7 +156,7 @@ inline size_t buildKeys(KeyboardMode mode, Key* out, size_t capacity) {
     for (size_t index = 0; index < definitions.count; ++index) {
       if (written >= capacity) return written;
       const KeyDefinition& definition = definitions.definitions[index];
-      out[written++] = Key{definition, makeRect(definition, row)};
+      out[written++] = Key(definition, makeRect(definition, row));
     }
   }
   return written;
