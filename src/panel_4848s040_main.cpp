@@ -11,6 +11,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "command_edit_state.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -30,10 +31,17 @@ constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
+constexpr int kEditButtonY = 350;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
 Arduino_RGB_Display* display = nullptr;
+
+using command_ui::EditingCommandState;
+using command_ui::Event;
+using command_ui::Mode;
+
+EditingCommandState commandEditor;
 
 enum class PanelState {
   Booting,
@@ -129,8 +137,41 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   display->print(label);
 }
 
+void drawCommandEditingPanel() {
+  if (!displayReady) return;
+  display->fillScreen(color565(9, 18, 30));
+  drawCentered("EDITAR COMANDO", 18, 2, color565(170, 220, 255));
+  drawCentered("MODO TECLADO", 48, 1, color565(145, 175, 195));
+
+  display->fillRoundRect(16, 82, 448, 236, 18, color565(20, 28, 40));
+  display->drawRoundRect(16, 82, 448, 236, 18, color565(120, 155, 180));
+
+  String buffer = commandEditor.commandBuffer();
+  if (buffer.length() > 170) buffer = buffer.substring(buffer.length() - 170);
+  const int lineWidth = 43;
+  int y = 104;
+  int start = 0;
+  while (start < static_cast<int>(buffer.length()) && y < 300) {
+    int end = start + lineWidth;
+    if (end > static_cast<int>(buffer.length())) end = buffer.length();
+    String line = buffer.substring(start, end);
+    drawCentered(line, y, 2, WHITE);
+    y += 28;
+    start = end;
+  }
+  if (buffer.isEmpty()) drawCentered("Escribe un comando", 180, 2, color565(125, 140, 155));
+
+  drawButton(20, 350, 210, 82, "CANCELAR", color565(90, 45, 45));
+  drawButton(250, 350, 210, 82, "CONFIRMAR", color565(18, 105, 73));
+}
+
 void drawPanel() {
   if (!displayReady) return;
+  if (commandEditor.isEditing()) {
+    drawCommandEditingPanel();
+    return;
+  }
+
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
   display->fillScreen(background);
@@ -439,6 +480,7 @@ void configureWebServer() {
       (WiFi.status() == WL_CONNECTED ? "true" : "false") +
       ",\"backend\":" + (backendAvailable ? "true" : "false") +
       ",\"pending\":" + (lastCommandId.length() ? "true" : "false") +
+      ",\"editing\":" + (commandEditor.isEditing() ? "true" : "false") +
       ",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
     web.send(200, "application/json", body);
   });
@@ -466,12 +508,48 @@ void connectWifi() {
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
 }
 
+void enterCommandEditing() {
+  const auto transition = commandEditor.beginEditing(app_config::defaultCommand);
+  if (transition.changed) {
+    updatePanel(panelState, "Editando comando");
+    drawPanel();
+  }
+}
+
+void handleEditingTouch(const TouchSample& sample) {
+  if (!sample.touched || touchDown) return;
+  if (sample.y < kEditButtonY) return;
+
+  if (sample.x < 240) {
+    const auto transition = commandEditor.handle(Event::cancelEditing());
+    if (transition.changed) drawPanel();
+    return;
+  }
+
+  const auto transition = commandEditor.handle(Event::commitEditing());
+  if (!transition.commandReady) {
+    drawCommandEditingPanel();
+    return;
+  }
+
+  const String command = commandEditor.commandBuffer().c_str();
+  send3CCommand(command);
+  drawPanel();
+}
+
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
+
+  if (commandEditor.isEditing()) {
+    handleEditingTouch(sample);
+    touchDown = sample.touched;
+    return;
+  }
+
+  if (sample.touched && !touchDown && sample.y >= kEditButtonY) {
     if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+    else enterCommandEditing();
   }
   touchDown = sample.touched;
 }
