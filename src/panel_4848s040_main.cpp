@@ -11,6 +11,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "touch_priority_dispatch.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -59,6 +60,7 @@ bool audioReady = false;
 bool mdnsReady = false;
 bool wifiAnnounced = false;
 bool touchDown = false;
+bool touchEditorActive = false;
 
 struct TouchSample {
   bool ready = false;
@@ -466,12 +468,41 @@ void connectWifi() {
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
 }
 
+void handleVirtualEditorTouch(const TouchSample& sample) {
+  // The editor consumes the entire touch stream while active. The concrete
+  // key hit-testing and commandBuffer mutation are intentionally delegated to
+  // the EditingCommand/virtual-keyboard layer; no normal button may observe it.
+  Serial.printf("GT911 -> virtual editor (%u,%u)\n", sample.x, sample.y);
+}
+
+void setTouchEditorActive(bool active) {
+  touchEditorActive = active;
+  // Discard the current press when changing modes so a touch held across the
+  // transition cannot trigger a normal button after the editor closes.
+  touchDown = false;
+}
+
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+
+  if (sample.touched && !touchDown) {
+    const touch_priority::Route route = touch_priority::route(
+      true, sample.x, sample.y, touch_priority::Policy{touchEditorActive});
+
+    switch (route) {
+      case touch_priority::Route::VirtualEditor:
+        handleVirtualEditorTouch(sample);
+        break;
+      case touch_priority::Route::ProbeWsl:
+        checkBackendHealth();
+        break;
+      case touch_priority::Route::Send3C:
+        send3CCommand(app_config::defaultCommand);
+        break;
+      case touch_priority::Route::None:
+        break;
+    }
   }
   touchDown = sample.touched;
 }
