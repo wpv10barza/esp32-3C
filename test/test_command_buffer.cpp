@@ -25,6 +25,43 @@ void test_multi_character_insert_at_arbitrary_cursor() {
   TEST_ASSERT_TRUE(buffer.invariantHolds());
 }
 
+void test_editing_works_at_every_cursor_position() {
+  constexpr char kOriginal[] = "ABCDE";
+  constexpr char kExpected[] = "ABXDE";
+
+  for (std::size_t position = 0; position <= 5; ++position) {
+    CommandBuffer<16> buffer;
+    TEST_ASSERT_TRUE(buffer.set(kOriginal));
+    buffer.setCursor(position);
+
+    if (position < 5) {
+      TEST_ASSERT_TRUE(buffer.deleteForward());
+      TEST_ASSERT_TRUE(buffer.insert('X'));
+    } else {
+      TEST_ASSERT_TRUE(buffer.insert('X'));
+      TEST_ASSERT_TRUE(buffer.backspace());
+    }
+
+    if (position == 2) {
+      TEST_ASSERT_EQUAL_STRING(kExpected, buffer.c_str());
+    }
+    TEST_ASSERT_TRUE(buffer.invariantHolds());
+  }
+
+  CommandBuffer<16> insertion;
+  TEST_ASSERT_TRUE(insertion.set("ABCDE"));
+  insertion.setCursor(0);
+  TEST_ASSERT_TRUE(insertion.insert('X'));
+  TEST_ASSERT_EQUAL_STRING("XABCDE", insertion.c_str());
+  TEST_ASSERT_EQUAL_UINT(1, insertion.cursor());
+
+  insertion.setCursor(insertion.length());
+  TEST_ASSERT_TRUE(insertion.insert('Y'));
+  TEST_ASSERT_EQUAL_STRING("XABCDEY", insertion.c_str());
+  TEST_ASSERT_EQUAL_UINT(insertion.length(), insertion.cursor());
+  TEST_ASSERT_TRUE(insertion.invariantHolds());
+}
+
 void test_backspace_removes_character_before_cursor() {
   CommandBuffer<32> buffer;
   TEST_ASSERT_TRUE(buffer.set("ABCD"));
@@ -100,6 +137,18 @@ void test_capacity_guard_does_not_corrupt_existing_text() {
   TEST_ASSERT_TRUE(buffer.invariantHolds());
 }
 
+void test_nul_insertion_is_rejected_without_corruption() {
+  CommandBuffer<16> buffer;
+  TEST_ASSERT_TRUE(buffer.set("ABC"));
+  buffer.setCursor(1);
+
+  TEST_ASSERT_FALSE(buffer.insert('\0'));
+  TEST_ASSERT_EQUAL_STRING("ABC", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(3, buffer.length());
+  TEST_ASSERT_EQUAL_UINT(1, buffer.cursor());
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+}
+
 void test_delete_and_backspace_at_boundaries_are_noops() {
   CommandBuffer<16> buffer;
   TEST_ASSERT_TRUE(buffer.set("ABC"));
@@ -134,11 +183,13 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_insert_at_middle_preserves_order);
   RUN_TEST(test_multi_character_insert_at_arbitrary_cursor);
+  RUN_TEST(test_editing_works_at_every_cursor_position);
   RUN_TEST(test_backspace_removes_character_before_cursor);
   RUN_TEST(test_forward_delete_removes_character_at_cursor);
   RUN_TEST(test_cursor_navigation_is_clamped_to_text_bounds);
   RUN_TEST(test_set_cursor_clamps_and_editing_remains_valid);
   RUN_TEST(test_capacity_guard_does_not_corrupt_existing_text);
+  RUN_TEST(test_nul_insertion_is_rejected_without_corruption);
   RUN_TEST(test_delete_and_backspace_at_boundaries_are_noops);
   RUN_TEST(test_failed_set_keeps_previous_valid_text);
   return UNITY_END();
