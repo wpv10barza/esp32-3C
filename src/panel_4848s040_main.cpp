@@ -10,7 +10,16 @@
 #include <driver/i2s.h>
 #include <esp_system.h>
 
+#include <cstddef>
+#include <cstdint>
+
 #include "app_config.h"
+#include "command_buffer.h"
+#include "command_text_viewport.h"
+#include "command_field.h"
+#include "editing_command_state.h"
+#include "touch_priority_dispatch.h"
+#include "virtual_keyboard.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -30,10 +39,32 @@ constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
+constexpr int kCommandCapacity = 48;
+constexpr touch_priority::Rect kCancelButton{20, 432, 230, 472};
+constexpr touch_priority::Rect kConfirmButton{250, 432, 460, 472};
+
+using Command = CommandBuffer<kCommandCapacity>;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
 Arduino_RGB_Display* display = nullptr;
+
+Command commandBuffer;
+EditingCommandState<kCommandCapacity> commandEditor(commandBuffer);
+virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+
+bool displayReady = false;
+bool audioReady = false;
+bool mdnsReady = false;
+bool wifiAnnounced = false;
+bool backendAvailable = false;
+bool touchDown = false;
+bool suppressTouchUntilRelease = false;
+unsigned long lastWifiAttempt = 0;
+unsigned long lastHealthCheck = 0;
+unsigned long lastCommandPoll = 0;
+String lastBackendMessage = "Sin verificar";
+String lastCommandId;
 
 enum class PanelState {
   Booting,
@@ -48,17 +79,6 @@ enum class PanelState {
 
 PanelState panelState = PanelState::Booting;
 String panelDetail = "Iniciando";
-String lastBackendMessage = "Sin verificar";
-String lastCommandId;
-unsigned long lastWifiAttempt = 0;
-unsigned long lastHealthCheck = 0;
-unsigned long lastCommandPoll = 0;
-bool backendAvailable = false;
-bool displayReady = false;
-bool audioReady = false;
-bool mdnsReady = false;
-bool wifiAnnounced = false;
-bool touchDown = false;
 
 struct TouchSample {
   bool ready = false;
@@ -114,23 +134,130 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
   display->print(text);
 }
 
-void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
+void drawButton(const touch_priority::Rect& rect, const char* label, uint16_t fill, uint8_t textSize = 2) {
   if (!displayReady) return;
-  display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
-  display->setTextSize(2);
+  display->fillRoundRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, 12, fill);
+  display->drawRoundRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, 12,
+                         color565(185, 210, 230));
+  display->setTextSize(textSize);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
   uint16_t textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
   display->setTextColor(WHITE);
-  display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
+  display->setCursor(rect.left + ((rect.right - rect.left) - textWidth) / 2,
+                     rect.top + ((rect.bottom - rect.top) - textHeight) / 2);
   display->print(label);
 }
 
-void drawPanel() {
+bool buildPrefixWidths(uint16_t (&prefix)[kCommandCapacity + 1]) {
+  prefix[0] = 0;
+  const char* text = commandEditor.draft().c_str();
+  const size_t length = commandEditor.draft().length();
+  if (length > kCommandCapacity) return false;
+  display->setTextSize(2);
+  for (size_t index = 0; index < length; ++index) {
+    String part;
+    part += text[index];
+    int16_t x1 = 0;
+    int16_t y1 = 0;
+    uint16_t width = 0;
+    uint16_t height = 0;
+    display->getTextBounds(part, 0, 0, &x1, &y1, &width, &height);
+    prefix[index + 1] = prefix[index] + width;
+  }
+  return true;
+}
+
+size_t cursorFromFieldTouch(int x) {
+  if (!commandEditor.isEditing()) return 0;
+  uint16_t prefix[kCommandCapacity + 1] = {};
+  buildPrefixWidths(prefix);
+  const size_t length = commandEditor.draft().length();
+  const int left = command_field::kEditingBounds.left + command_field::kHorizontalPadding;
+  const int target = x - left;
+  if (target <= 0 || length == 0) return 0;
+  size_t cursor = 0;
+  for (size_t index = 0; index < length; ++index) {
+    const int midpoint = static_cast<int>(prefix[index] + (prefix[index + 1] - prefix[index]) / 2);
+    if (target < midpoint) break;
+    cursor = index + 1;
+  }
+  return cursor;
+}
+
+void drawCommandField(const command_field::Rect& bounds, bool editing) {
   if (!displayReady) return;
+  const int contentX = bounds.left + command_field::kHorizontalPadding;
+  const int contentY = bounds.top + command_field::kVerticalPadding;
+  const int contentRight = bounds.right - command_field::kHorizontalPadding;
+  const int contentWidth = contentRight - contentX;
+
+  display->fillRoundRect(bounds.left, bounds.top, bounds.right - bounds.left,
+                         bounds.bottom - bounds.top, 10, color565(7, 13, 23));
+  display->drawRoundRect(bounds.left, bounds.top, bounds.right - bounds.left,
+                         bounds.bottom - bounds.top, 10,
+                         color565(110, 150, 175));
+  display->setTextSize(2);
+  display->setTextColor(WHITE);
+
+  uint16_t prefix[kCommandCapacity + 1] = {};
+  buildPrefixWidths(prefix);
+  const size_t length = commandEditor.draft().length();
+  const size_t cursor = commandEditor.draft().cursor();
+  const command_text_viewport::Window view =
+      command_text_viewport::compute(prefix, length, cursor, contentWidth, command_field::kCursorWidth);
+
+  if (length == 0) {
+    display->setTextColor(color565(135, 150, 165));
+    display->setCursor(contentX, contentY);
+    display->print(editing ? "Escriba una orden..." : "Sin orden");
+    if (editing) display->fillRect(contentX, contentY - 2, command_field::kCursorWidth,
+                                   bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
+  } else {
+    String visible = commandEditor.draft().c_str();
+    visible = visible.substring(view.first, view.last);
+    display->setTextColor(color565(235, 242, 248));
+    display->setCursor(contentX, contentY);
+    display->print(visible);
+    if (editing) {
+      const int cursorX = contentX + view.cursorX;
+      if (cursorX < contentRight) {
+        display->fillRect(cursorX, contentY - 2, command_field::kCursorWidth,
+                          bounds.bottom - contentY - command_field::kVerticalPadding + 2, WHITE);
+      }
+    }
+  }
+}
+
+void drawKeyboard() {
+  if (!displayReady) return;
+  virtual_keyboard::Key keys[40] = {};
+  const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 40);
+  for (size_t index = 0; index < count; ++index) {
+    const auto& key = keys[index];
+    const uint16_t fill = key.definition.kind == virtual_keyboard::KeyKind::Character
+                              ? color565(25, 52, 72)
+                              : color565(68, 64, 24);
+    display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
+                           key.rect.bottom - key.rect.top, 6, fill);
+    display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
+                           key.rect.bottom - key.rect.top, 6, color565(105, 135, 155));
+    display->setTextSize(key.definition.kind == virtual_keyboard::KeyKind::Character ? 2 : 1);
+    display->setTextColor(WHITE);
+    int16_t x1 = 0;
+    int16_t y1 = 0;
+    uint16_t tw = 0;
+    uint16_t th = 0;
+    display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &tw, &th);
+    display->setCursor(key.rect.left + ((key.rect.right - key.rect.left) - tw) / 2,
+                       key.rect.top + ((key.rect.bottom - key.rect.top) - th) / 2);
+    display->print(key.definition.label);
+  }
+}
+
+void drawNormalPanel() {
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
   display->fillScreen(background);
@@ -141,14 +268,6 @@ void drawPanel() {
     display->drawLine(172, 105, 112, 165, eye);
     display->drawLine(308, 105, 368, 165, eye);
     display->drawLine(368, 105, 308, 165, eye);
-  } else if (panelState == PanelState::Applied) {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
-    display->drawLine(205, 205, 225, 218, eye);
-    display->drawLine(225, 218, 255, 218, eye);
-    display->drawLine(255, 218, 275, 205, eye);
   } else {
     display->fillRoundRect(105, 102, 75, 76, 22, eye);
     display->fillRoundRect(300, 102, 75, 76, 22, eye);
@@ -160,12 +279,26 @@ void drawPanel() {
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
   drawCentered(detail, 286, 1, color565(210, 225, 235));
-  if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
-  }
+  if (WiFi.status() == WL_CONNECTED) drawCentered(WiFi.localIP().toString(), 298, 1, color565(150, 205, 235));
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawCommandField(command_field::kNormalBounds, false);
+  drawButton(touch_priority::kProbeWslButton, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(touch_priority::kSend3CButton, "ENVIAR 3C", color565(18, 105, 73));
+}
+
+void drawEditingPanel() {
+  display->fillScreen(color565(9, 18, 30));
+  drawCentered("EDITAR COMANDO", 8, 2, color565(170, 220, 255));
+  drawCommandField(command_field::kEditingBounds, true);
+  drawKeyboard();
+  drawButton(kCancelButton, "CANCELAR", color565(90, 45, 45), 1);
+  drawButton(kConfirmButton, "CONFIRMAR", color565(18, 105, 73), 1);
+}
+
+void drawPanel() {
+  if (!displayReady) return;
+  if (commandEditor.isEditing()) drawEditingPanel();
+  else drawNormalPanel();
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -203,10 +336,7 @@ void updatePanel(PanelState state, const String& detail, bool sound = false) {
 }
 
 bool initializeAudio() {
-  if (!app_config::panelAudioEnabled) {
-    Serial.println("Audio deshabilitado: GPIO 1/2/40 reservados para relays.");
-    return false;
-  }
+  if (!app_config::panelAudioEnabled) return false;
   i2s_config_t config = {};
   config.mode = static_cast<i2s_mode_t>(I2S_MODE_MASTER | I2S_MODE_TX);
   config.sample_rate = 16000;
@@ -219,7 +349,6 @@ bool initializeAudio() {
   config.use_apll = false;
   config.tx_desc_auto_clear = true;
   config.fixed_mclk = 0;
-
   i2s_pin_config_t pinConfig = {};
   pinConfig.bck_io_num = pins::audioBclk;
   pinConfig.ws_io_num = pins::audioLrclk;
@@ -235,19 +364,13 @@ bool initializeAudio() {
 }
 
 bool initializeDisplay() {
-  displayBus = new Arduino_ESP32SPI(
-    GFX_NOT_DEFINED, pins::lcdCs, pins::lcdClock, pins::lcdMosi, GFX_NOT_DEFINED);
+  displayBus = new Arduino_ESP32SPI(GFX_NOT_DEFINED, pins::lcdCs, pins::lcdClock, pins::lcdMosi, GFX_NOT_DEFINED);
   auto* rgbPanel = new Arduino_ESP32RGBPanel(
-    18, 17, 16, 21,
-    11, 12, 13, 14, 0,
-    8, 20, 3, 46, 9, 10,
-    4, 5, 6, 7, 15,
-    1, 10, 8, 50,
-    1, 10, 8, 20);
-  display = new Arduino_RGB_Display(
-    kScreenWidth, kScreenHeight, rgbPanel, 0, true,
-    displayBus, GFX_NOT_DEFINED,
-    tl040wvs03_init_operations, sizeof(tl040wvs03_init_operations));
+      18, 17, 16, 21, 11, 12, 13, 14, 0, 8, 20, 3, 46, 9, 10,
+      4, 5, 6, 7, 15, 1, 10, 8, 50, 1, 10, 8, 20);
+  display = new Arduino_RGB_Display(kScreenWidth, kScreenHeight, rgbPanel, 0, true, displayBus,
+                                    GFX_NOT_DEFINED, tl040wvs03_init_operations,
+                                    sizeof(tl040wvs03_init_operations));
   if (!display->begin()) return false;
   pinMode(pins::backlight, OUTPUT);
   analogWrite(pins::backlight, app_config::panelBrightness);
@@ -317,10 +440,10 @@ String jsonStringValue(const String& json, const char* key) {
   if (position < 0) return "";
   position = json.indexOf(':', position + token.length());
   if (position < 0) return "";
-  position++;
-  while (position < static_cast<int>(json.length()) && isspace(json[position])) position++;
+  ++position;
+  while (position < static_cast<int>(json.length()) && isspace(json[position])) ++position;
   if (position >= static_cast<int>(json.length()) || json[position] != '"') return "";
-  position++;
+  ++position;
   String value;
   while (position < static_cast<int>(json.length())) {
     const char current = json[position++];
@@ -349,11 +472,8 @@ bool checkBackendHealth() {
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
   backendAvailable = code == 200;
-  updatePanel(
-    backendAvailable ? PanelState::Ready : PanelState::Error,
-    backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code,
-    true);
-  Serial.printf("GET health -> %d %s\n", code, lastBackendMessage.c_str());
+  updatePanel(backendAvailable ? PanelState::Ready : PanelState::Error,
+              backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code, true);
   return backendAvailable;
 }
 
@@ -379,9 +499,9 @@ int send3CCommand(const String& rawCommand) {
   char randomPart[9];
   snprintf(randomPart, sizeof(randomPart), "%08lx", static_cast<unsigned long>(esp_random()));
   const String requestId = String(app_config::deviceId) + "-" + randomPart + "-" + String(millis());
-  const String body = "{\"device_id\":\"" + jsonEscape(app_config::deviceId) +
-    "\",\"request_id\":\"" + jsonEscape(requestId) +
-    "\",\"text\":\"" + jsonEscape(command) + "\"}";
+  const String body = String("{\"device_id\":\"") + jsonEscape(app_config::deviceId) +
+      "\",\"request_id\":\"" + jsonEscape(requestId) +
+      "\",\"text\":\"" + jsonEscape(command) + "\"}";
   const int code = http.POST(body);
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
@@ -395,7 +515,6 @@ int send3CCommand(const String& rawCommand) {
     backendAvailable = false;
     updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);
   }
-  Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
   return code;
 }
 
@@ -408,10 +527,8 @@ void pollCommandStatus() {
   const int code = http.GET();
   const String body = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
-  if (code != 200) {
-    Serial.printf("GET command status -> %d %s\n", code, body.c_str());
-    return;
-  }
+  if (code != 200) return;
+
   const String status = jsonStringValue(body, "status");
   const String result = jsonStringValue(body, "result");
   if (status == "applied") {
@@ -436,27 +553,132 @@ void configureWebServer() {
   web.on("/", HTTP_GET, [] { web.send_P(200, "text/html; charset=utf-8", controlPage); });
   web.on("/health", HTTP_GET, [] {
     const String body = String("{\"ok\":true,\"board\":\"ESP32-4848S040\",\"wifi\":") +
-      (WiFi.status() == WL_CONNECTED ? "true" : "false") +
-      ",\"backend\":" + (backendAvailable ? "true" : "false") +
-      ",\"pending\":" + (lastCommandId.length() ? "true" : "false") +
-      ",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+        (WiFi.status() == WL_CONNECTED ? "true" : "false") +
+        ",\"backend\":" + (backendAvailable ? "true" : "false") +
+        ",\"pending\":" + (lastCommandId.length() ? "true" : "false") +
+        ",\"editing\":" + (commandEditor.isEditing() ? "true" : "false") +
+        ",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
     web.send(200, "application/json", body);
   });
   web.on("/api/backend-health", HTTP_POST, [] {
     web.send(checkBackendHealth() ? 200 : 502, "application/json", lastBackendMessage);
   });
   web.on("/api/3c", HTTP_POST, [] {
-    const int code = send3CCommand(web.arg("text"));
+    const String text = web.arg("text");
+    const int code = send3CCommand(text);
     web.send(code == 200 || code == 202 ? 202 : 502, "application/json", lastBackendMessage);
   });
   web.onNotFound([] { web.send(404, "application/json", "{\"error\":\"not found\"}"); });
   web.begin();
 }
 
+void beginCommandEditing() {
+  if (!commandEditor.begin()) return;
+  keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+  suppressTouchUntilRelease = true;
+  drawPanel();
+}
+
+bool commitAndSendCommand() {
+  if (!commandEditor.isEditing() || commandEditor.draft().empty()) return false;
+  if (!commandEditor.ok()) return false;
+  if (!app_config::commandBuffer.set(commandBuffer.c_str())) return false;
+  suppressTouchUntilRelease = true;
+  send3CCommand(app_config::commandBuffer);
+  drawPanel();
+  return true;
+}
+
+void cancelCommandEditing() {
+  if (!commandEditor.isEditing()) return;
+  if (!commandEditor.cancel()) return;
+  suppressTouchUntilRelease = true;
+  drawPanel();
+}
+
+void handleEditingTouch(const TouchSample& sample) {
+  if (!sample.touched || touchDown) return;
+
+  if (kCancelButton.contains(sample.x, sample.y)) {
+    cancelCommandEditing();
+    return;
+  }
+  if (kConfirmButton.contains(sample.x, sample.y)) {
+    commitAndSendCommand();
+    return;
+  }
+
+  if (command_field::kEditingBounds.contains(sample.x, sample.y)) {
+    commandEditor.draft().setCursor(cursorFromFieldTouch(sample.x));
+    drawPanel();
+    return;
+  }
+
+  virtual_keyboard::Key key{};
+  if (!virtual_keyboard::hitTest(keyboardMode, sample.x, sample.y, &key)) return;
+  const auto kind = key.definition.kind;
+  switch (kind) {
+    case virtual_keyboard::KeyKind::Character:
+      if (key.definition.label[0] != '\0') commandEditor.draft().insert(key.definition.label[0]);
+      break;
+    case virtual_keyboard::KeyKind::Backspace:
+      commandEditor.draft().backspace();
+      break;
+    case virtual_keyboard::KeyKind::DeleteForward:
+      commandEditor.draft().deleteForward();
+      break;
+    case virtual_keyboard::KeyKind::Space:
+      commandEditor.draft().insert(' ');
+      break;
+    case virtual_keyboard::KeyKind::Clear:
+      commandEditor.draft().clear();
+      break;
+    case virtual_keyboard::KeyKind::CursorLeft:
+      commandEditor.draft().moveLeft();
+      break;
+    case virtual_keyboard::KeyKind::CursorRight:
+      commandEditor.draft().moveRight();
+      break;
+    case virtual_keyboard::KeyKind::ToggleAlphaNumeric:
+      keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
+                         ? virtual_keyboard::KeyboardMode::NumericSymbols
+                         : virtual_keyboard::KeyboardMode::Alpha;
+      break;
+    case virtual_keyboard::KeyKind::Enter:
+      commitAndSendCommand();
+      return;
+  }
+  drawPanel();
+}
+
+void handleTouch() {
+  const TouchSample sample = readTouch();
+  if (!sample.ready) return;
+
+  if (suppressTouchUntilRelease) {
+    if (!sample.touched) {
+      suppressTouchUntilRelease = false;
+      touchDown = false;
+    }
+    return;
+  }
+
+  const touch_priority::Route route = touch_priority::route(
+      sample.touched, sample.x, sample.y, commandEditor.isEditing());
+
+  if (route == touch_priority::Route::VirtualEditor) {
+    handleEditingTouch(sample);
+  } else if (route == touch_priority::Route::ProbeWsl) {
+    checkBackendHealth();
+  } else if (route == touch_priority::Route::Send3C) {
+    beginCommandEditing();
+  }
+  touchDown = sample.touched;
+}
+
 void connectWifi() {
   if (!strlen(app_config::wifiSsid)) {
     updatePanel(PanelState::Offline, "Configure local_config.h");
-    Serial.println("Configure include/local_config.h antes de usar Wi-Fi.");
     return;
   }
   WiFi.mode(WIFI_STA);
@@ -466,23 +688,12 @@ void connectWifi() {
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
 }
 
-void handleTouch() {
-  const TouchSample sample = readTouch();
-  if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::commandBuffer);
-  }
-  touchDown = sample.touched;
-}
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
   delay(250);
-  Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\n",
-    psramFound() ? "OK" : "NO", ESP.getPsramSize());
-
+  commandBuffer.set(app_config::commandBuffer.c_str());
   displayReady = initializeDisplay();
   if (!displayReady) Serial.println("No se pudo inicializar la pantalla ST7701.");
   Wire.begin(pins::touchSda, pins::touchScl, 400000);
