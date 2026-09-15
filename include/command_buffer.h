@@ -33,7 +33,7 @@ class CommandBuffer {
   size_t assign(const char* text) {
     clear();
     if (text == nullptr) return 0;
-    while (text[length_] != '\0' && length_ < capacity()) {
+    while (length_ < capacity() && text[length_] != '\0') {
       data_[length_] = text[length_];
       ++length_;
     }
