@@ -40,7 +40,7 @@ struct KeyRect {
   }
 };
 
-constexpr bool rectanglesOverlap(const KeyRect& a, const KeyRect& b) {
+inline bool rectanglesOverlap(const KeyRect& a, const KeyRect& b) {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 }
 
@@ -74,15 +74,15 @@ struct Key {
 
 struct Row { const KeyDefinition* definitions; size_t count; };
 
-constexpr int columnOrigin(uint8_t column) {
+inline int columnOrigin(uint8_t column) {
   return kKeyboardX + static_cast<int>(column) * (kKeyWidth + kColumnGap);
 }
 
-constexpr int rowOrigin(uint8_t row) {
+inline int rowOrigin(uint8_t row) {
   return kKeyboardY + static_cast<int>(row) * (kKeyHeight + kRowGap);
 }
 
-constexpr KeyRect makeRect(const KeyDefinition& definition, uint8_t row) {
+inline KeyRect makeRect(const KeyDefinition& definition, uint8_t row) {
   const int left = columnOrigin(definition.startColumn);
   const int width = static_cast<int>(definition.spanColumns) * kKeyWidth +
                     static_cast<int>(definition.spanColumns - 1) * kColumnGap;
@@ -91,54 +91,54 @@ constexpr KeyRect makeRect(const KeyDefinition& definition, uint8_t row) {
 }
 
 namespace detail {
-constexpr std::array<KeyDefinition, 10> kAlphaRow0 = {{
+const KeyDefinition kAlphaRow0[] = {
   {KeyKind::Character,"Q",0,1},{KeyKind::Character,"W",1,1},{KeyKind::Character,"E",2,1},
   {KeyKind::Character,"R",3,1},{KeyKind::Character,"T",4,1},{KeyKind::Character,"Y",5,1},
-  {KeyKind::Character,"U",6,1},{KeyKind::Character,"I",7,1},{KeyKind::Character,"O",8,1},{KeyKind::Character,"P",9,1}}};
-constexpr std::array<KeyDefinition, 10> kAlphaRow1 = {{
+  {KeyKind::Character,"U",6,1},{KeyKind::Character,"I",7,1},{KeyKind::Character,"O",8,1},{KeyKind::Character,"P",9,1}};
+const KeyDefinition kAlphaRow1[] = {
   {KeyKind::Character,"A",0,1},{KeyKind::Character,"S",1,1},{KeyKind::Character,"D",2,1},
   {KeyKind::Character,"F",3,1},{KeyKind::Character,"G",4,1},{KeyKind::Character,"H",5,1},
-  {KeyKind::Character,"J",6,1},{KeyKind::Character,"K",7,1},{KeyKind::Character,"L",8,1},{KeyKind::Backspace,"BKSP",9,1}}};
-constexpr std::array<KeyDefinition, 10> kAlphaRow2 = {{
+  {KeyKind::Character,"J",6,1},{KeyKind::Character,"K",7,1},{KeyKind::Character,"L",8,1},{KeyKind::Backspace,"BKSP",9,1}};
+const KeyDefinition kAlphaRow2[] = {
   {KeyKind::Character,"Z",0,1},{KeyKind::Character,"X",1,1},{KeyKind::Character,"C",2,1},
   {KeyKind::Character,"V",3,1},{KeyKind::Character,"B",4,1},{KeyKind::Character,"N",5,1},
-  {KeyKind::Character,"M",6,1},{KeyKind::Character,",",7,1},{KeyKind::Character,".",8,1},{KeyKind::Character,"/",9,1}}};
-constexpr std::array<KeyDefinition, 7> kAlphaControlRow = {{
+  {KeyKind::Character,"M",6,1},{KeyKind::Character,",",7,1},{KeyKind::Character,".",8,1},{KeyKind::Character,"/",9,1}};
+const KeyDefinition kAlphaControlRow[] = {
   {KeyKind::ToggleAlphaNumeric,"123",0,1},{KeyKind::Space,"SPACE",1,4},{KeyKind::Backspace,"BKSP",5,1},
-  {KeyKind::Clear,"CLR",6,1},{KeyKind::CursorLeft,"<",7,1},{KeyKind::CursorRight,">",8,1},{KeyKind::Enter,"ENTER",9,1}}};
+  {KeyKind::Clear,"CLR",6,1},{KeyKind::CursorLeft,"<",7,1},{KeyKind::CursorRight,">",8,1},{KeyKind::Enter,"ENTER",9,1}};
 
-constexpr std::array<KeyDefinition, 10> kNumericRow0 = {{
+const KeyDefinition kNumericRow0[] = {
   {KeyKind::Character,"1",0,1},{KeyKind::Character,"2",1,1},{KeyKind::Character,"3",2,1},{KeyKind::Character,"4",3,1},
   {KeyKind::Character,"5",4,1},{KeyKind::Character,"6",5,1},{KeyKind::Character,"7",6,1},{KeyKind::Character,"8",7,1},
-  {KeyKind::Character,"9",8,1},{KeyKind::Character,"0",9,1}}};
-constexpr std::array<KeyDefinition, 10> kNumericRow1 = {{
+  {KeyKind::Character,"9",8,1},{KeyKind::Character,"0",9,1}};
+const KeyDefinition kNumericRow1[] = {
   {KeyKind::Character,"@",0,1},{KeyKind::Character,"#",1,1},{KeyKind::Character,"$",2,1},{KeyKind::Character,"%",3,1},
   {KeyKind::Character,"&",4,1},{KeyKind::Character,"*",5,1},{KeyKind::Character,"-",6,1},{KeyKind::Character,"+",7,1},
-  {KeyKind::Character,"=",8,1},{KeyKind::Character,"/",9,1}}};
-constexpr std::array<KeyDefinition, 10> kNumericRow2 = {{
+  {KeyKind::Character,"=",8,1},{KeyKind::Character,"/",9,1}};
+const KeyDefinition kNumericRow2[] = {
   {KeyKind::Character,"(",0,1},{KeyKind::Character,")",1,1},{KeyKind::Character,"[",2,1},{KeyKind::Character,"]",3,1},
   {KeyKind::Character,"{",4,1},{KeyKind::Character,"}",5,1},{KeyKind::Character,":",6,1},{KeyKind::Character,";",7,1},
-  {KeyKind::Character,"'",8,1},{KeyKind::Backspace,"BKSP",9,1}}};
-constexpr std::array<KeyDefinition, 7> kNumericControlRow = {{
+  {KeyKind::Character,"'",8,1},{KeyKind::Backspace,"BKSP",9,1}};
+const KeyDefinition kNumericControlRow[] = {
   {KeyKind::ToggleAlphaNumeric,"ABC",0,1},{KeyKind::Space,"SPACE",1,4},{KeyKind::Backspace,"BKSP",5,1},
-  {KeyKind::Clear,"CLR",6,1},{KeyKind::CursorLeft,"<",7,1},{KeyKind::CursorRight,">",8,1},{KeyKind::Enter,"ENTER",9,1}}};
-}  // namespace detail
+  {KeyKind::Clear,"CLR",6,1},{KeyKind::CursorLeft,"<",7,1},{KeyKind::CursorRight,">",8,1},{KeyKind::Enter,"ENTER",9,1}};
+}
 
 inline Row rowDefinition(KeyboardMode mode, uint8_t row) {
   if (mode == KeyboardMode::Alpha) {
     switch (row) {
-      case 0: return {detail::kAlphaRow0.data(), detail::kAlphaRow0.size()};
-      case 1: return {detail::kAlphaRow1.data(), detail::kAlphaRow1.size()};
-      case 2: return {detail::kAlphaRow2.data(), detail::kAlphaRow2.size()};
-      case 3: return {detail::kAlphaControlRow.data(), detail::kAlphaControlRow.size()};
+      case 0: return {detail::kAlphaRow0, 10};
+      case 1: return {detail::kAlphaRow1, 10};
+      case 2: return {detail::kAlphaRow2, 10};
+      case 3: return {detail::kAlphaControlRow, 7};
       default: return {nullptr, 0};
     }
   }
   switch (row) {
-    case 0: return {detail::kNumericRow0.data(), detail::kNumericRow0.size()};
-    case 1: return {detail::kNumericRow1.data(), detail::kNumericRow1.size()};
-    case 2: return {detail::kNumericRow2.data(), detail::kNumericRow2.size()};
-    case 3: return {detail::kNumericControlRow.data(), detail::kNumericControlRow.size()};
+    case 0: return {detail::kNumericRow0, 10};
+    case 1: return {detail::kNumericRow1, 10};
+    case 2: return {detail::kNumericRow2, 10};
+    case 3: return {detail::kNumericControlRow, 7};
     default: return {nullptr, 0};
   }
 }
@@ -163,8 +163,8 @@ inline size_t buildKeys(KeyboardMode mode, Key* out, size_t capacity) {
 }
 
 inline int hitTestIndex(KeyboardMode mode, int x, int y) {
-  std::array<Key, 40> keys{};
-  const size_t count = buildKeys(mode, keys.data(), keys.size());
+  Key keys[40];
+  const size_t count = buildKeys(mode, keys, 40);
   for (size_t index = 0; index < count; ++index) {
     if (keys[index].rect.contains(x, y)) return static_cast<int>(index);
   }
@@ -172,15 +172,15 @@ inline int hitTestIndex(KeyboardMode mode, int x, int y) {
 }
 
 inline bool hitTest(KeyboardMode mode, int x, int y, Key* matched = nullptr) {
-  std::array<Key, 40> keys{};
-  const size_t count = buildKeys(mode, keys.data(), keys.size());
-  std::array<touch::KeyFrame, 40> frames{};
+  Key keys[40];
+  const size_t count = buildKeys(mode, keys, 40);
+  touch::KeyFrame frames[40];
   for (size_t index = 0; index < count; ++index) {
     frames[index] = touch::KeyFrame(keys[index].rect.left, keys[index].rect.top,
                                     static_cast<int16_t>(keys[index].rect.right - keys[index].rect.left),
                                     static_cast<int16_t>(keys[index].rect.bottom - keys[index].rect.top));
   }
-  const size_t match = touch::hitTest(frames.data(), count, x, y);
+  const size_t match = touch::hitTest(frames, count, x, y);
   if (match == touch::kNoKey) return false;
   if (matched) *matched = keys[match];
   return true;
