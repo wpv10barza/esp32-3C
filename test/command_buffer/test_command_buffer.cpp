@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <unity.h>
 
 #include "command_buffer.h"
@@ -107,9 +106,11 @@ void test_delete_and_backspace_at_boundaries_are_noops() {
 
   buffer.moveHome();
   TEST_ASSERT_FALSE(buffer.backspace());
-  TEST_ASSERT_FALSE(buffer.deleteForward() == false && buffer.length() == 0);
-  TEST_ASSERT_EQUAL_STRING("ABC", buffer.c_str());
+  TEST_ASSERT_TRUE(buffer.deleteForward());
+  TEST_ASSERT_EQUAL_STRING("BC", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(0, buffer.cursor());
 
+  buffer.set("ABC");
   buffer.moveEnd();
   TEST_ASSERT_FALSE(buffer.deleteForward());
   TEST_ASSERT_TRUE(buffer.backspace());
@@ -129,8 +130,7 @@ void test_failed_set_keeps_previous_valid_text() {
   TEST_ASSERT_TRUE(buffer.invariantHolds());
 }
 
-void setup() {
-  delay(1000);
+int main() {
   UNITY_BEGIN();
   RUN_TEST(test_insert_at_middle_preserves_order);
   RUN_TEST(test_multi_character_insert_at_arbitrary_cursor);
@@ -141,7 +141,5 @@ void setup() {
   RUN_TEST(test_capacity_guard_does_not_corrupt_existing_text);
   RUN_TEST(test_delete_and_backspace_at_boundaries_are_noops);
   RUN_TEST(test_failed_set_keeps_previous_valid_text);
-  UNITY_END();
+  return UNITY_END();
 }
-
-void loop() {}
