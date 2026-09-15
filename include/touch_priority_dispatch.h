@@ -4,25 +4,18 @@
 
 namespace touch_priority {
 
-enum class Route : uint8_t {
-  None,
-  VirtualEditor,
-  ProbeWsl,
-  Send3C,
-};
+enum class Route : uint8_t { None, VirtualEditor, ProbeWsl, Send3C };
 
 struct Rect {
   int16_t left = 0;
   int16_t top = 0;
   int16_t right = 0;
   int16_t bottom = 0;
-
   constexpr bool contains(int x, int y) const {
     return x >= left && x < right && y >= top && y < bottom;
   }
 };
 
-// These are the existing physical controls and remain unchanged in Normal mode.
 constexpr Rect kProbeWslButton{20, 370, 230, 452};
 constexpr Rect kSend3CButton{250, 370, 460, 452};
 
