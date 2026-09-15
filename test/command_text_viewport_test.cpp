@@ -35,6 +35,25 @@ int main() {
   assert(view.cursorX == viewport - cursorWidth || view.cursorX < viewport - cursorWidth);
   assert(view.cursorX <= viewport - cursorWidth);
 
+  // Touch-to-cursor mapping must use the same scrolled origin as rendering.
+  const std::size_t touchedLeft = command_text_viewport::cursorForTouch(
+      widths, 12, view, 100, 100);
+  const std::size_t touchedRight = command_text_viewport::cursorForTouch(
+      widths, 12, view, 100 + viewport - 1, 100);
+  assert(touchedLeft == view.first);
+  assert(touchedRight == view.last);
+
+  // A touch in the middle of a visible glyph resolves to the nearest caret.
+  view = command_text_viewport::compute(widths, 12, 8, 50, cursorWidth);
+  const int contentX = 20;
+  const int firstGlyphLeft = static_cast<int>(widths[view.first] - widths[view.first]);
+  (void)firstGlyphLeft;
+  const int glyphWidth = static_cast<int>(widths[view.first + 1] - widths[view.first]);
+  if (view.first < view.last) {
+    const int midpoint = contentX + glyphWidth / 2;
+    assert(command_text_viewport::cursorForTouch(widths, 12, view, midpoint, contentX) == view.first + 1);
+  }
+
   // Short text does not scroll at all.
   view = command_text_viewport::compute(widths, 4, 4, 100, cursorWidth);
   assert(view.first == 0);
