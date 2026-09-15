@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 
 
-SOURCE = Path("panel_4848s040_main.cpp").read_text(encoding="utf-8")
+SOURCE = Path("src/panel_4848s040_main.cpp").read_text(encoding="utf-8")
 
 
 def constant(name: str) -> int:
