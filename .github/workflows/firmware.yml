@@ -23,14 +23,14 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Run native regression suite
+      - name: Run isolated native regression suite
         run: pio test --environment native
       - name: Run static integration regression
         run: python test/command_ui_integration_regression.py
       - name: Verify end-to-end command UI integration
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
-            test/test_command_ui_integration.cpp \
+            test/command_ui_integration/main.cpp \
             -o /tmp/test_command_ui_integration
           /tmp/test_command_ui_integration
 
