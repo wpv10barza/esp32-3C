@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Arduino.h>
+
 // Keep personal values in include/local_config.h. That file is ignored by Git.
 #if __has_include("local_config.h")
 #include "local_config.h"
@@ -50,7 +52,14 @@ static constexpr char wifiPassword[] = WIFI_PASSWORD_VALUE;
 static constexpr char assistantBaseUrl[] = ASSISTANT_BASE_URL_VALUE;
 static constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
 static constexpr char deviceId[] = DEVICE_ID_VALUE;
-static constexpr char defaultCommand[] = DEFAULT_3C_COMMAND_VALUE;
+
+// Runtime source of truth for the command sent by ENVIAR 3C.
+// The default is only the initial buffer contents; input handling may replace it.
+static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;
+
+// Backward-compatible alias. New code must read/write commandBuffer instead.
+static String& defaultCommand = commandBuffer;
+
 static constexpr bool panelAudioEnabled = PANEL_AUDIO_ENABLED_VALUE != 0;
 static constexpr uint8_t panelBrightness = PANEL_BRIGHTNESS_VALUE;
 static constexpr unsigned long wifiRetryMs = 10000UL;
