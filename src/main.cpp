@@ -250,7 +250,7 @@ void connectWifi() {
 
 void handleButtons() {
   if (healthButton.pressed()) checkBackendHealth();
-  if (commandButton.pressed()) send3CCommand(app_config::defaultCommand);
+  if (commandButton.pressed()) send3CCommand(app_config::commandBuffer);
   if (moveButton.pressed()) {
     static const char* actions[] = {"forward", "left", "right", "sit", "shake", "stop"};
     runMovement(actions[movementIndex]);
