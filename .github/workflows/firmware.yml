@@ -23,6 +23,8 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
+      - name: Run virtual keyboard geometry tests
+        run: pio test --environment native
       - name: Compile ESP-Hi C3 and ESP32-4848S040 firmware
         run: pio run --environment esp_hi_3c --environment panel_4848s040
       - name: Upload firmware binaries
