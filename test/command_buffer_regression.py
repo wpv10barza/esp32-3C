@@ -15,9 +15,16 @@ def test_command_buffer_is_runtime_source():
 
 def test_panel_send_path_consumes_runtime_buffer_alias():
     assert "send3CCommand(app_config::defaultCommand);" in PANEL
-    assert "send3CCommand(app_config::commandBuffer);" not in PANEL
+    assert "send3CCommand(\"Cambia la tarea J10 a mensual\");" not in PANEL
 
 
 def test_esp_hi_send_path_consumes_runtime_buffer_alias():
     assert "send3CCommand(app_config::defaultCommand);" in ESP_HI
     assert "send3CCommand(\"Cambia la tarea J10 a mensual\");" not in ESP_HI
+
+
+if __name__ == "__main__":
+    test_command_buffer_is_runtime_source()
+    test_panel_send_path_consumes_runtime_buffer_alias()
+    test_esp_hi_send_path_consumes_runtime_buffer_alias()
+    print("commandBuffer regression checks: PASS")
