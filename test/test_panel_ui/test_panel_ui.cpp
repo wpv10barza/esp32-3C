@@ -11,9 +11,9 @@ void test_screen_geometry_is_480x480() {
 void test_touch_targets_are_inside_screen_and_disjoint() {
   TEST_ASSERT_TRUE(panel_ui::kLeftButton.insideScreen());
   TEST_ASSERT_TRUE(panel_ui::kRightButton.insideScreen());
-
   TEST_ASSERT_EQUAL_INT(
-    0, panel_ui::kLeftButton.x + panel_ui::kLeftButton.width - panel_ui::kRightButton.x);
+    16, panel_ui::kRightButton.x -
+        (panel_ui::kLeftButton.x + panel_ui::kLeftButton.width));
 }
 
 void test_left_target_maps_only_to_wsl() {
