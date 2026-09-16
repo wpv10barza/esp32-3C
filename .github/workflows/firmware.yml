@@ -15,7 +15,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,8 +23,18 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Run native regression suite
-        run: pio test --environment native
+      - name: Run isolated native regression suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test_name in \
+            test_command_buffer \
+            virtual_keyboard_hit_test \
+            command_text_viewport_test \
+            command_field_geometry_test; do
+            echo "==> pio test --environment native --filter ${test_name}"
+            pio test --environment native --filter "${test_name}"
+          done
       - name: Verify end-to-end command UI integration
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
