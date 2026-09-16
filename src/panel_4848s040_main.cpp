@@ -175,18 +175,16 @@ bool buildPrefixWidths(uint16_t (&prefix)[kCommandCapacity + 1]) {
 size_t cursorFromFieldTouch(int x) {
   if (!commandEditor.isEditing()) return 0;
   uint16_t prefix[kCommandCapacity + 1] = {};
-  buildPrefixWidths(prefix);
+  if (!buildPrefixWidths(prefix)) return 0;
+
   const size_t length = commandEditor.draft().length();
-  const int left = kEditingCommandField.left + command_field::kHorizontalPadding;
-  const int target = x - left;
-  if (target <= 0 || length == 0) return 0;
-  size_t cursor = 0;
-  for (size_t index = 0; index < length; ++index) {
-    const int midpoint = static_cast<int>(prefix[index] + (prefix[index + 1] - prefix[index]) / 2);
-    if (target < midpoint) break;
-    cursor = index + 1;
-  }
-  return cursor;
+  const size_t cursor = commandEditor.draft().cursor();
+  const int contentX = kEditingCommandField.left + command_field::kHorizontalPadding;
+  const int contentWidth = kEditingCommandField.width() -
+                            2 * command_field::kHorizontalPadding;
+  const command_text_viewport::Window view = command_text_viewport::compute(
+      prefix, length, cursor, contentWidth, command_field::kCursorWidth);
+  return command_text_viewport::cursorForTouch(prefix, length, view, x, contentX);
 }
 
 void drawCommandField(const command_field::Rect& bounds, bool editing) {
