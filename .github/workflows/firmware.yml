@@ -15,28 +15,48 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install PlatformIO
-        run: pip install platformio==6.1.18
-      - name: Run native unit tests (command buffer + virtual keyboard hit testing)
-        run: pio test --environment native
+      - name: Run command buffer regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/command_buffer/main.cpp \
+            -o /tmp/test_command_buffer
+          /tmp/test_command_buffer
+      - name: Run command viewport regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/command_text_viewport/main.cpp \
+            -o /tmp/test_command_text_viewport
+          /tmp/test_command_text_viewport
+      - name: Run virtual keyboard regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/virtual_keyboard/main.cpp \
+            -o /tmp/test_virtual_keyboard
+          /tmp/test_virtual_keyboard
+      - name: Run end-to-end command UI regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/command_ui_integration/main.cpp \
+            -o /tmp/test_command_ui_integration
+          /tmp/test_command_ui_integration
+      - name: Run static integration regression
+        run: python test/command_ui_integration_regression.py
 
   compile:
     runs-on: ubuntu-latest
     needs: test
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Regression test for runtime commandBuffer
-        run: python test/command_buffer_regression.py
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
       - name: Compile ESP-Hi C3 and ESP32-4848S040 firmware
