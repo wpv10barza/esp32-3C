@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "command_buffer.h"
+#include "command_field.h"
 #include "command_text_viewport.h"
 #include "editing_command_state.h"
 #include "touch_hit_test.h"
@@ -28,6 +29,16 @@ int main() {
   assert(touch_priority::route(true, 20, 370, false) == touch_priority::Route::ProbeWsl);
   assert(touch_priority::route(true, 250, 370, false) == touch_priority::Route::Send3C);
   assert(touch_priority::route(true, 230, 400, false) == touch_priority::Route::None);
+
+  // Physical 480x480 field geometry is inside the panel and separated from controls.
+  assert(command_field::insideScreen(command_field::kNormalBounds));
+  assert(command_field::insideScreen(command_field::kEditingBounds));
+  assert(command_field::kNormalBounds.bottom < touch_priority::kProbeWslButton.top);
+  assert(command_field::kEditingBounds.bottom <= virtual_keyboard::kKeyboardY);
+  assert(command_field::kEditingBounds.contains(command_field::kEditingBounds.left,
+                                                command_field::kEditingBounds.top));
+  assert(!command_field::kEditingBounds.contains(command_field::kEditingBounds.right,
+                                                 command_field::kEditingBounds.top));
 
   // Keyboard hit-testing finds a unique key at exact boundaries.
   virtual_keyboard::Key q{};
@@ -56,6 +67,11 @@ int main() {
   assert(window.last == 48);
   assert(window.first > 0);
   assert(window.cursorX <= 98);
+
+  // Touch-to-caret mapping must use the active scrolled window, not the full text origin.
+  assert(command_text_viewport::cursorForTouch(widths, 48, window, 0, 0) == window.first);
+  assert(command_text_viewport::cursorForTouch(widths, 48, window, window.cursorX - 1, 0) >= window.first);
+  assert(command_text_viewport::cursorForTouch(widths, 48, window, 100, 0) == window.last);
 
   // CANCEL never changes the committed value.
   const char* committedBeforeCancel = committed.c_str();
