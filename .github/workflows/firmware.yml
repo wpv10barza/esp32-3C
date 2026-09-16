@@ -2,7 +2,7 @@ name: Firmware ESP32 3C
 
 on:
   push:
-    branches: [main]
+    branches: [main, integrate/pr5-11-command-ui]
   pull_request:
 
 permissions:
