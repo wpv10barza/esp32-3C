@@ -11,6 +11,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "touch_priority_dispatch.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -164,8 +165,12 @@ void drawPanel() {
     drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(touch_priority::kProbeWslButton.left, touch_priority::kProbeWslButton.top,
+             touch_priority::kProbeWslButton.width(), touch_priority::kProbeWslButton.height(),
+             "PROBAR WSL", color565(15, 82, 135));
+  drawButton(touch_priority::kSend3CButton.left, touch_priority::kSend3CButton.top,
+             touch_priority::kSend3CButton.width(), touch_priority::kSend3CButton.height(),
+             "ENVIAR 3C", color565(18, 105, 73));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -469,9 +474,17 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::commandBuffer);
+  if (sample.touched && !touchDown) {
+    switch (touch_priority::route(true, sample.x, sample.y, false)) {
+      case touch_priority::Route::ProbeWsl:
+        checkBackendHealth();
+        break;
+      case touch_priority::Route::Send3C:
+        send3CCommand(app_config::commandBuffer);
+        break;
+      case touch_priority::Route::None:
+        break;
+    }
   }
   touchDown = sample.touched;
 }
@@ -518,13 +531,9 @@ void loop() {
   } else {
     wifiAnnounced = false;
     if (strlen(app_config::wifiSsid) && millis() - lastWifiAttempt >= app_config::wifiRetryMs) {
-      lastWifiAttempt = millis();
-      WiFi.disconnect();
-      WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
-      updatePanel(PanelState::Busy, "Reconectando Wi-Fi");
+      connectWifi();
     }
   }
-  delay(5);
 }
 
-#endif  // BOARD_PANEL_4848S040
+#endif
