@@ -9,7 +9,7 @@ ESP_HI = (ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
 
 def test_command_buffer_is_runtime_source():
     assert "static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;" in CONFIG
-    assert "static constexpr char defaultCommand[]" not in CONFIG
+    assert "defaultCommand" not in CONFIG
 
 
 def test_panel_send_path_consumes_runtime_buffer_directly():
