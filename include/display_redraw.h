@@ -34,10 +34,6 @@ constexpr Plan modeTransitionPlan(bool modeChanged) {
     : Plan{UpdateKind::None, Rect{0, 0, 0, 0}};
 }
 
-// Typing only invalidates the command field. The caller should include both the
-// old and new cursor/text extents so stale pixels are erased before repainting.
-Plan typingUpdatePlan(Rect previousBounds, Rect nextBounds);
-
 constexpr bool valid(Rect r) {
   return r.width > 0 && r.height > 0 &&
          r.x >= 0 && r.y >= 0 &&
@@ -58,9 +54,31 @@ constexpr Rect unite(Rect a, Rect b) {
               static_cast<int16_t>(bottom - top)};
 }
 
+inline Rect clampToCommandField(Rect region) {
+  const int16_t left = region.x > kCommandField.x ? region.x : kCommandField.x;
+  const int16_t top = region.y > kCommandField.y ? region.y : kCommandField.y;
+  const int16_t rightA = region.x + region.width;
+  const int16_t rightB = kCommandField.x + kCommandField.width;
+  const int16_t bottomA = region.y + region.height;
+  const int16_t bottomB = kCommandField.y + kCommandField.height;
+  const int16_t right = rightA < rightB ? rightA : rightB;
+  const int16_t bottom = bottomA < bottomB ? bottomA : bottomB;
+  if (right <= left || bottom <= top) return Rect{0, 0, 0, 0};
+  return Rect{left, top, static_cast<int16_t>(right - left),
+              static_cast<int16_t>(bottom - top)};
+}
+
+inline Plan typingUpdatePlan(Rect previousBounds, Rect nextBounds) {
+  // Restrict invalidation to the editor. A malformed caller rectangle cannot
+  // accidentally erase the keyboard, status area, or buttons.
+  const Rect previous = clampToCommandField(previousBounds);
+  const Rect next = clampToCommandField(nextBounds);
+  const Rect dirty = unite(previous, next);
+  if (!valid(dirty)) return Plan{UpdateKind::Region, kCommandField};
+  return Plan{UpdateKind::Region, dirty};
+}
+
 // These helpers intentionally depend only on a small fillRect-style display API.
-// They can be used with Arduino_GFX on hardware without coupling the planner to
-// a concrete display class, which also keeps the planner unit-testable on native.
 template <typename Display>
 void clearFull(Display& target, uint16_t background) {
   target.fillScreen(background);
