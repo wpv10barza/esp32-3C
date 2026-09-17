@@ -28,35 +28,25 @@ void test_action_zones_are_separate_and_have_footer() {
 void test_button_boundaries_are_half_open() {
   const int y = touch_priority::kActionTop + 1;
 
-  TEST_ASSERT_EQUAL_INT(Route::ProbeWsl,
-                        touch_priority::route(true, touch_priority::kProbeWslButton.left, y, false));
-  TEST_ASSERT_EQUAL_INT(Route::ProbeWsl,
-                        touch_priority::route(true, touch_priority::kProbeWslButton.right - 1, y, false));
-  TEST_ASSERT_EQUAL_INT(Route::None,
-                        touch_priority::route(true, touch_priority::kProbeWslButton.right, y, false));
+  TEST_ASSERT_TRUE(touch_priority::route(true, touch_priority::kProbeWslButton.left, y, false) == Route::ProbeWsl);
+  TEST_ASSERT_TRUE(touch_priority::route(true, touch_priority::kProbeWslButton.right - 1, y, false) == Route::ProbeWsl);
+  TEST_ASSERT_TRUE(touch_priority::route(true, touch_priority::kProbeWslButton.right, y, false) == Route::None);
 
-  TEST_ASSERT_EQUAL_INT(Route::Send3C,
-                        touch_priority::route(true, touch_priority::kSend3CButton.left, y, false));
-  TEST_ASSERT_EQUAL_INT(Route::Send3C,
-                        touch_priority::route(true, touch_priority::kSend3CButton.right - 1, y, false));
-  TEST_ASSERT_EQUAL_INT(Route::None,
-                        touch_priority::route(true, touch_priority::kSend3CButton.right, y, false));
+  TEST_ASSERT_TRUE(touch_priority::route(true, touch_priority::kSend3CButton.left, y, false) == Route::Send3C);
+  TEST_ASSERT_TRUE(touch_priority::route(true, touch_priority::kSend3CButton.right - 1, y, false) == Route::Send3C);
+  TEST_ASSERT_TRUE(touch_priority::route(true, touch_priority::kSend3CButton.right, y, false) == Route::None);
 }
 
 void test_gap_and_footer_do_not_trigger_actions() {
   const int y = touch_priority::kActionTop + 1;
-  TEST_ASSERT_EQUAL_INT(Route::None,
-                        touch_priority::route(true, 240, y, false));
-  TEST_ASSERT_EQUAL_INT(Route::None,
-                        touch_priority::route(true, 240, touch_priority::kActionBottom, false));
+  TEST_ASSERT_TRUE(touch_priority::route(true, 240, y, false) == Route::None);
+  TEST_ASSERT_TRUE(touch_priority::route(true, 240, touch_priority::kActionBottom, false) == Route::None);
 }
 
 void test_editor_has_priority_over_action_buttons() {
   const int y = touch_priority::kActionTop + 10;
-  TEST_ASSERT_EQUAL_INT(Route::VirtualEditor,
-                        touch_priority::route(true, 40, y, true));
-  TEST_ASSERT_EQUAL_INT(Route::VirtualEditor,
-                        touch_priority::route(true, 440, y, true));
+  TEST_ASSERT_TRUE(touch_priority::route(true, 40, y, true) == Route::VirtualEditor);
+  TEST_ASSERT_TRUE(touch_priority::route(true, 440, y, true) == Route::VirtualEditor);
 }
 
 void test_unclipped_button_label_budgets() {
