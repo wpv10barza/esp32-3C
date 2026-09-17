@@ -39,6 +39,12 @@ jobs:
             test/virtual_keyboard/main.cpp \
             -o /tmp/test_virtual_keyboard
           /tmp/test_virtual_keyboard
+      - name: Run 480x480 panel touch and overflow regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/panel_480_touch_validation_test.cpp \
+            -o /tmp/test_panel_480_touch_validation
+          /tmp/test_panel_480_touch_validation
       - name: Run end-to-end command UI regression
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
