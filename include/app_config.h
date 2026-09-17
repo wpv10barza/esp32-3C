@@ -54,11 +54,8 @@ static constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
 static constexpr char deviceId[] = DEVICE_ID_VALUE;
 
 // Runtime source of truth for the command sent by ENVIAR 3C.
-// The default is only the initial buffer contents; input handling may replace it.
+// DEFAULT_3C_COMMAND_VALUE is used only to seed the editable buffer at boot.
 static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;
-
-// Backward-compatible alias. New code must read/write commandBuffer instead.
-static String& defaultCommand = commandBuffer;
 
 static constexpr bool panelAudioEnabled = PANEL_AUDIO_ENABLED_VALUE != 0;
 static constexpr uint8_t panelBrightness = PANEL_BRIGHTNESS_VALUE;
