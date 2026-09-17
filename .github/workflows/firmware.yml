@@ -23,8 +23,14 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Run native unit tests (command buffer + virtual keyboard hit testing)
+      - name: Run native PlatformIO tests
         run: pio test --environment native
+      - name: Verify 480x480 touch action zones
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/panel_480_touch_validation.cpp \
+            -o /tmp/test_panel_480_touch_validation
+          /tmp/test_panel_480_touch_validation
 
   compile:
     runs-on: ubuntu-latest
