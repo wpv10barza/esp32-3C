@@ -23,8 +23,17 @@ jobs:
           python-version: "3.12"
       - name: Install PlatformIO
         run: pip install platformio==6.1.18
-      - name: Run native PlatformIO tests
-        run: pio test --environment native
+      - name: Run native PlatformIO tests without standalone root regression source
+        run: |
+          mv test/command_buffer_regression.cpp /tmp/command_buffer_regression.cpp
+          trap 'mv /tmp/command_buffer_regression.cpp test/command_buffer_regression.cpp' EXIT
+          pio test --environment native
+      - name: Verify command buffer regression
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
+            test/command_buffer_regression.cpp \
+            -o /tmp/test_command_buffer_regression
+          /tmp/test_command_buffer_regression
       - name: Verify 480x480 touch action zones
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
