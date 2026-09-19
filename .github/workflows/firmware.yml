@@ -28,7 +28,7 @@ jobs:
       - name: Verify 480x480 touch action zones
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude \
-            test/panel_480_touch_validation.cpp \
+            scripts/panel_480_touch_validation.cpp \
             -o /tmp/test_panel_480_touch_validation
           /tmp/test_panel_480_touch_validation
 
