@@ -43,8 +43,11 @@ class CommandBuffer {
     cursor_ = 0;
   }
 
+  bool empty() const { return length_ == 0; }
+
   bool insert(char value) {
-    if (length_ >= Capacity) return false;
+    // Keep the buffer a valid NUL-terminated string after every operation.
+    if (value == '\0' || length_ >= Capacity) return false;
 
     for (std::size_t index = length_; index > cursor_; --index) {
       data_[index] = data_[index - 1];
@@ -69,7 +72,7 @@ class CommandBuffer {
     for (std::size_t index = length_; index > cursor_; --index) {
       data_[index + length - 1] = data_[index - 1];
     }
-    if (length != 0) std::memcpy(data_ + cursor_, text, length);
+    std::memcpy(data_ + cursor_, text, length);
 
     length_ += length;
     cursor_ += length;
