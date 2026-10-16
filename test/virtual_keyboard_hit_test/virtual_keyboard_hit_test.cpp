@@ -32,8 +32,6 @@ void assertHorizontalBoundaryIsExclusive(KeyboardMode mode) {
   Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(mode, keys, 50);
 
-  // Consecutive keys in the first populated row have a real gap. The right
-  // edge of one key is not part of that key, and the next key starts later.
   const Key& first = keys[0];
   const Key& second = keys[1];
   assert(first.rect.bottom == second.rect.bottom);
@@ -55,8 +53,6 @@ void assertVerticalBoundaryIsExclusive(KeyboardMode mode) {
   const size_t count = virtual_keyboard::buildKeys(mode, keys, 50);
   assert(count > 10);
 
-  // Key 0 in row 0 and the corresponding first key in row 1 are separated by
-  // the row gap. Neither key owns the gap, so a touch there is ignored.
   const Key& row0 = keys[0];
   const Key& row1 = keys[10];
   assert(row0.rect.left == row1.rect.left);
@@ -84,7 +80,6 @@ void assertControlKeysHit(KeyboardMode mode) {
   const size_t count = virtual_keyboard::buildKeys(mode, keys, 50);
   assert(count >= 33);
 
-  // Search by semantic key kind so the test stays valid if rows are extended.
   bool foundToggle = false;
   bool foundSpace = false;
   bool foundEnter = false;
@@ -109,7 +104,6 @@ void assertControlKeysHit(KeyboardMode mode) {
 }  // namespace
 
 int main() {
-  // KeyRect itself is the primitive used by every virtual key.
   constexpr KeyRect rect{10, 20, 30, 40};
   static_assert(rect.contains(10, 20));
   static_assert(rect.contains(29, 39));
